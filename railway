@@ -5,7 +5,8 @@ import sys
 
 
 class RailwayError(RuntimeError): pass
-class NameError(RailwayError): pass
+class ExistsError(RailwayError): pass
+class ParsingError(RailwayError): pass
 class LetError(RailwayError): pass
 class UnletError(RailwayError): pass
 class LoopAssertError(RailwayError): pass
@@ -156,6 +157,11 @@ class Func:
         self.func = func
         self.arguments = arguments
 
+class Print:
+    __slots__ = ['arguments']
+    def __init__(self, arguments):
+        self.arguments = arguments
+
 
 
 class Parser():
@@ -169,6 +175,8 @@ class Parser():
             ln = ln.replace('(', ' ( ').replace(')', ' ) ')
             ln = ln.replace('{', ' ').replace('}', ' ')
             ln = ln.strip().split()
+        if ln[-1] == '\\':
+            ln = ln[:-1] + self.get_line()
         return ln
     
     def get_line(self):
@@ -181,42 +189,85 @@ class Parser():
         if not self.lines_buffer:
             ln = self._get_line()
             self.lines_buffer.append(ln)
-        return ln[0]
+        return self.lines_buffer[0][0]
     
     def parse(self, line_generator):
         self.line_generator = line_generator
-        ast = []
+        functions = {}
         while True:
             try:
                 kwd = self.peak_kwd()
-                method = getattr(self, f'parse_{kwd}')
-                ast.append(method())
             except StopIteration:
                 break
-
-        for ln in ast:
-            print(ln)
+            if kwd == 'func':
+                n, f = self.parse_func()
+                if n in functions:
+                    raise ExistsError(f"func {n} already defined")
+                functions[n] = f
+            elif kwd == 'global':
+                self.parse_global()
+            elif kwd == 'include':
+                self.parse_include()
+        return functions
     
     def parse_func(self):
-        res = []
+        ln = self.get_line()
+        func_name = ln[1]
+        func_params = ln[2:]
+        func_lines = []
         while True:
-            ln = self.get_line()
-            res.append(ln)
-            if ln[0] in ['cpreturn', 'return']:
+            if self.peak_kwd() in ('return', 'undoreturn'):
                 break
-        return res
-   
-    def parse_cpfunc(self):
-        res = []
-        while True:
-            ln = self.get_line()
-            res.append(ln)
-            if ln[0] in ['cpreturn', 'return']:
-                break
-        return res
+            else:
+                func_lines.append(self.parse_function_line())
+        ln = self.get_line()
+        func_undoreturn = ln[0] == 'undoreturn'
+        func_return_params = ln[1:]
+        function = Function(name=func_name,
+                            parameters=func_params,
+                            lines=func_lines,
+                            return_parameters=func_return_params,
+                            undoreturn=func_undoreturn)
+        return func_name, function
+        
+                        
     
-    def parse_let(self):
-        pass
+    def parse_function_line(self):
+        kwd = self.peak_kwd()
+        if kwd in ('let', 'unlet'):
+            return self.parse_assignment()
+        elif kwd == 'print':
+            return self.parse_print()
+        else:
+            return self.parse_modification()
+        
+    def parse_expr(self, expr):
+        return Frac(3)
+        
+    def parse_assignment(self):
+        ln = self.get_line()
+        Statement = Assignment if ln[0] == 'let' else Unassignment
+        if ln[2] != '=':
+            raise ParsingError(f"Expected '=' in (un/)assignment, got {ln[2]}")
+        return Statement(lval=ln[1], expr=self.parse_expr(ln[3:]))
+        
+    def parse_modification(self):
+        ln = self.get_line()
+        MODOP_lookup = {'+=': MODOP_ADD,
+                        '-=': MODOP_SUB,
+                        '*=': MODOP_MUL,
+                        '/=': MODOP_DIV}
+        if ln[1] not in MODOP_lookup:
+            raise ParsingError(f"Unrecognised mod-op {ln[1]}")
+        binop = MODOP_lookup[ln[1]]
+        return Modification(lval=ln[0],
+                            op=binop,
+                            expr=self.parse_expr(ln[2:]))
+
+    def parse_print(self):
+        ln = self.get_line()
+        return Print(arguments=ln[1:])
+            
 
         
 
@@ -259,7 +310,7 @@ class Scope():
         else:
             lval = assignment.lval
             if lval not in self.locals:
-                raise NameError(f'Variable {lval} does not exist')
+                raise ExistsError(f'Variable {lval} does not exist')
             rval = self.eval_expr(assignment.expr)
             if self.locals[lval].get() != rval:
                 raise UnletError(f'Variable {lval} has value {self.locals[lval].get()}, not {rval}')
@@ -330,12 +381,17 @@ class Scope():
                             f"Function {func_obj.name} returned but {v} persists")
             self.locals.update(dict(zip(func_call.lvals, return_vars)))
 
+    def run_Print(self, print_, backwards=False):
+        vals = [str(self.resolve_var(arg).get())
+                for arg in print_.arguments]
+        print(*vals)
+
     def resolve_var(self, lval):
         if lval in self.locals:
             return self.locals[lval]
         if lval in Scope.globals:
             return Scope.globals[lval]
-        raise NameError(f"Variable {lval} does not exist")
+        raise ExistsError(f"Variable {lval} does not exist")
             
         
         
@@ -347,8 +403,14 @@ if __name__ == '__main__':
         sys.exit()
         
     with open(sys.argv[1], 'r') as f:
-        Parser().parse(f)
-
+        functions = Parser().parse(f)
+    Scope.functions = functions
+    interpreter = Scope()
+    interpreter.locals = {'argc': None, 'argv': None}
+    main_call = Func([], functions['main'], [])
+    interpreter.run_Func(main_call)
+    quit()
+        
     S = Scope()
     ax_bad = Assignment(lval='x', expr=Frac(1, 3))
     ax = Assignment(lval='x', expr=Frac(1, 2))
