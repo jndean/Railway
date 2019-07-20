@@ -1,10 +1,18 @@
+#!/usr/bin/env python3.7
+
 from fractions import Fraction as Frac
 import sys
 
-class r_ConflictingDeclaration(RuntimeError): pass
-class r_LetError(RuntimeError): pass
-class r_UnletError(RuntimeError): pass
-class r_LoopAssertError(RuntimeError): pass
+
+class RailwayError(RuntimeError): pass
+class NameError(RailwayError): pass
+class LetError(RailwayError): pass
+class UnletError(RailwayError): pass
+class LoopAssertError(RailwayError): pass
+class MemAccessError(RailwayError): pass
+class ZeroMultiplicationError(RailwayError): pass
+class ZeroDivisionError(RailwayError): pass
+class InformationLeakError(RailwayError): pass
 
 def BINOP_ADD(a, b):
     return a + b
@@ -45,9 +53,15 @@ def OP_NEG(a):
 
 MODOP_ADD = BINOP_ADD
 MODOP_SUB = BINOP_SUB
-MODOP_MUL = BINOP_MUL
-MODOP_DIV = BINOP_DIV
 MODOP_XOR = BINOP_XOR
+def MODOP_MUL(a, b):
+    if b == 0:
+        raise ZeroMultiplcationError()
+    return a * b
+def MODOP_DIV(a, b):
+    if b == 0:
+        raise ZeroDivisionError()
+    return a / b
 MODOP_inverter = {
     MODOP_ADD: MODOP_SUB,
     MODOP_SUB: MODOP_ADD,
@@ -57,30 +71,44 @@ MODOP_inverter = {
 }
 
 
-KWD_LET = 'let'
-KWD_DO = 'do'
-KWD_UNLET = 'unlet'
-
 
 # -------------------- Objects -------------------- #
+class Variable:
 
-class Var:
-    __slots__ = ['val']
-    def __init__(self, val):
-        self.val = val
+    __slots__ = ['memory', 'length']
+    def __init__(self, memory, length):
+        self.memory = memory
+        self.length = length
+
+    def set(self, val, index=0):
+        if index >= self.length:
+            raise MemAccessError(f'Error setting element {index} '
+                                   f'in array of size {self.length}')
+        self.memory[index] = val
+        
+    def get(self, index=0):
+        if index >= self.length:
+            raise MemAccessError(f'Error accessing element {index} '
+                                   f'in array of size {self.length}')
+        return self.memory[index]
+
+    def copy(self):
+        return Variable(memory=self.memory.copy(), length=self.length)
 
         
 class Function:
-    __slots__ = ['parameters', 'lines', 'return_expr']
-    def __init__(self, parameters, lines, return_expr):
+    __slots__ = ['name', 'parameters', 'lines', 'return_parameters', 'undoreturn']
+    def __init__(self, name, parameters, lines, return_parameters, undoreturn):
+        self.name = name
         self.parameters = parameters
         self.lines = lines
-        self.return_expr = return_expr
+        self.return_parameters = return_parameters
+        self.undoreturn = undoreturn
 
 
 # -------------------- Lines -------------------- #    
 
-class Statement:
+class Modification:
     __slots__ = ['lval', 'op', 'unop', 'expr']
     def __init__(self, lval, op, expr):
         self.lval = lval
@@ -122,7 +150,12 @@ class Swap:
         self.rval = rval
 
 class Func:
-    __slots__ = ['lval', ]
+    __slots__ = ['lvals', 'func', 'arguments']
+    def __init__(self, lvals, func, arguments):
+        self.lvals = lvals
+        self.func = func
+        self.arguments = arguments
+
 
 
 class Parser():
@@ -187,18 +220,18 @@ class Parser():
 
         
 
-class Interpreter():
+class Scope():
     globals = {}
     functions = {}
     
-    def __init__(self):
-        self.locals = {}
+    def __init__(self, locals=None):
+        self.locals = locals if locals is not None else {}
 
     def eval_expr(self, expr):
         if isinstance(expr, Frac):  # Number literal
             return expr
         if isinstance(expr, str):  # Variable name
-            return self.locals[expr].val
+            return self.locals[expr].get()
         if isinstance(expr, tuple):  # Binary operation
             op, exp1, exp2 = expr
             return op(self.eval_expr(exp1), self.eval_expr(exp2))
@@ -210,26 +243,26 @@ class Interpreter():
             method = getattr(self, f'run_{type(line).__name__}')
             method(line, backwards)
         
-    def run_Statement(self, statement, backwards=False):
-        lval = self.resolve_lval(statement.lval)
-        op = statement.unop if backwards else statement.op
-        rval = self.eval_expr(statement.expr)
-        lval.val = op(lval.val, rval)
+    def run_Modification(self, modification, backwards=False):
+        lval = self.resolve_var(modification.lval)
+        op = modification.unop if backwards else modification.op
+        rval = self.eval_expr(modification.expr)
+        lval.set(op(lval.get(), rval))
             
     def run_Assignment(self, assignment, backwards=False):
         if not backwards:
             lval = assignment.lval
             if lval in self.locals:
-                raise r_LetError(f'Variable {lval} already exists')
-            rval = self.eval_expr(assignment.expr)
-            self.locals[lval] = Var(rval)
+                raise LetError(f'Variable {lval} already exists')
+            rval_memory = [self.eval_expr(assignment.expr)]
+            self.locals[lval] = Variable(memory=rval_memory, length=1)
         else:
             lval = assignment.lval
             if lval not in self.locals:
-                raise r_UnletError(f'Variable {lval} does not exist')
+                raise NameError(f'Variable {lval} does not exist')
             rval = self.eval_expr(assignment.expr)
-            if self.locals[lval].val != rval:
-                raise r_UnletError(f'Variable {lval} has value {self.locals[lval].val}, not {rval}')
+            if self.locals[lval].get() != rval:
+                raise UnletError(f'Variable {lval} has value {self.locals[lval].get()}, not {rval}')
             del self.locals[lval]
 
     def run_Unassignment(self, unassignment, backwards=False):
@@ -245,32 +278,64 @@ class Interpreter():
         assertion = loop.stop_expr if backwards else loop.start_expr
         test = loop.start_expr if backwards else loop.stop_expr
         if not self.eval_expr(assertion):
-            raise r_LoopAssertionError(f'{assertion} is not true before entering loop')
+            raise LoopAssertionError(f'{assertion} is not true before entering loop')
         while not self.eval_expr(test):
             self.run_lines(loop.lines, backwards)
 
     def run_Swap(self, swap, backwards=False):
-        lval = self.resolve_lval(swap.lval)
-        rval = self.resolve_lval(swap.rval)
-        tmp = lval.val
-        lval.val = rval.val
-        rval.val = tmp
+        lval = self.resolve_var(swap.lval)
+        rval = self.resolve_var(swap.rval)
+        l, r = lval.get(), rval.get()
+        lval.set(r), rval.set(l)
         
-    def run_Function(self, function, backwards=False):
-        if backwards:
-            raise NotImplementedError()
-        else:
-            arg_vals = [self.run_expr(expr) for expr in function.arguments]
-            new_locals = dict(zip(function.arg_names, arg_vals))
-            I = Interpreter(locals=new_locals)
-            I.run_lines(function.lines)
-            
+    def run_Func(self, func_call, backwards=False):
+        func_obj = func_call.func
         
+        if backwards and func_obj.undoreturn:
+            for name in func_call.lvals:
+                del self.locals[name]
 
-    def resolve_lval(self, lval):
+        elif backwards:
+            args = [self.resolve_var(k) for k in func_call.arguments]
+            new_locals = dict(zip(func_obj.parameters, args))
+            args = [self.resolve_var(k) for k in func_call.lvals]
+            new_locals.update(dict(zip(func_obj.return_parameters, args)))
+            subscope = Scope(locals=new_locals)
+            subscope.run_lines(func_obj.lines, backwards=True)
+            return_vars = [subscope.resolve_var(var)
+                           for var in func_obj.parameters]
+            for v in subscope.locals:
+                if v not in func_obj.parameters and v not in func_obj.return_parameters:
+                    raise InformationLeakError(
+                        f"Function {func_obj.name} returned but {v} persists")
+            for name in func_call.lvals:
+                del self.locals[name]
+
+        else:
+            func_obj = func_call.func
+            args = [self.resolve_var(k) for k in func_call.arguments]
+            new_locals = dict(zip(func_obj.parameters, args))
+            subscope = Scope(locals=new_locals)
+            subscope.run_lines(func_obj.lines)
+            if func_obj.undoreturn:
+                return_vars = [subscope.resolve_var(var).copy()
+                              for var in func_obj.return_parameters]
+                subscope.run_lines(func_obj.lines, backwards=True)
+            else:
+                return_vars = [subscope.resolve_var(var)
+                               for var in func_obj.return_parameters]
+                for v in subscope.locals:
+                    if v not in func_obj.parameters and v not in func_obj.return_parameters:
+                        raise InformationLeakError(
+                            f"Function {func_obj.name} returned but {v} persists")
+            self.locals.update(dict(zip(func_call.lvals, return_vars)))
+
+    def resolve_var(self, lval):
         if lval in self.locals:
             return self.locals[lval]
-        return Interpreter.globals[lval]
+        if lval in Scope.globals:
+            return Scope.globals[lval]
+        raise NameError(f"Variable {lval} does not exist")
             
         
         
@@ -284,16 +349,16 @@ if __name__ == '__main__':
     with open(sys.argv[1], 'r') as f:
         Parser().parse(f)
 
-    I = Interpreter()
+    S = Scope()
     ax_bad = Assignment(lval='x', expr=Frac(1, 3))
     ax = Assignment(lval='x', expr=Frac(1, 2))
     un_ax = Unassignment(lval='x', expr=Frac(1, 2))
     ay = Assignment(lval='y', expr=Frac(1, 3))
     e = (BINOP_SUB, (BINOP_EQ, 'x', 'x'), Frac(1, 3))
-    s = Statement(lval='y', op=MODOP_ADD, expr=e)
+    s = Modification(lval='y', op=MODOP_ADD, expr=e)
     if_ = If((BINOP_NEQ, 'x', 'x'),
-             [Statement('y', MODOP_ADD, Frac(10, 1))],
-             [Statement('y', MODOP_ADD, Frac(20, 1))],
+             [Modification('y', MODOP_ADD, Frac(10, 1))],
+             [Modification('y', MODOP_ADD, Frac(20, 1))],
              (BINOP_NEQ, 'x', 'x'))
 
     lines = [Assignment('A', Frac(1)),
@@ -302,24 +367,42 @@ if __name__ == '__main__':
              Loop(
                  (BINOP_EQ, 'i', Frac(0)),
                  [
-                     Statement('A', MODOP_MUL, Frac(1, 5)),
-                     Statement('i', MODOP_ADD, Frac(1))
+                     Modification('A', MODOP_MUL, Frac(1, 5)),
+                     Modification('i', MODOP_ADD, Frac(1))
                  ],
                  (BINOP_EQ, 'i', (BINOP_DIV, 'n', Frac(2)))),
              Unassignment('n', Frac(6))]
     
-    
-    I.run_lines([ax, ay, s, if_, un_ax])
-    I.run_Assignment(Assignment(lval='z1', expr='y'))
-    
-    I.run_lines(lines)
-    I.run_Assignment(Assignment(lval='z2', expr='A'))
-    
-    I.run_lines(lines, backwards=True)
-    I.run_lines([ax, ay, s, if_, un_ax], backwards=True)
 
-    I.run_Swap(Swap('z1', 'z2'))
-    I.run_Swap(Swap('z1', 'z2'))
+    function = Function(
+        name='myF',
+        parameters=['x'],
+        lines=[
+            Assignment('y', (BINOP_ADD, 'x', Frac(2)))
+            ],
+        return_parameters=['y'],
+        undoreturn=False)
+    
+    func_lines = [Assignment('X', Frac(10)),
+                  Func(lvals=['Y'],
+                       func=function,
+                       arguments=['X']),
+                  Unassignment('X', Frac(10))]
+    
+    S.run_lines([ax, ay, s, if_, un_ax])
+    S.run_Assignment(Assignment(lval='z1', expr='y'))
+    
+    S.run_lines(lines)
+    S.run_Assignment(Assignment(lval='z2', expr='A'))
+    
+    S.run_lines(lines, backwards=True)
+    S.run_lines([ax, ay, s, if_, un_ax], backwards=True)
 
-    for n, v in I.locals.items():
-        print(n, v.val)
+    S.run_Swap(Swap('z1', 'z2'))
+    S.run_Swap(Swap('z1', 'z2'))
+
+    S.run_lines(func_lines)
+    S.run_lines(func_lines, backwards=True)
+
+    for n, v in S.locals.items():
+        print(n, v.get())
