@@ -1,0 +1,10 @@
+
+func main {argc argv}
+  let x = 1
+  if 1
+    x += 10
+  else
+    x += 20
+  fi 1
+  print x
+return

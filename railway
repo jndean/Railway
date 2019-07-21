@@ -130,12 +130,12 @@ class Unassignment:
         self.expr = expr
 
 class If:
-    __slots__ = ['in_expr', 'true_lines', 'false_lines', 'out_expr']
-    def __init__(self, in_expr, true_lines, false_lines, out_expr):
-        self.in_expr = in_expr
+    __slots__ = ['enter_expr', 'true_lines', 'false_lines', 'exit_expr']
+    def __init__(self, enter_expr, true_lines, false_lines, exit_expr):
+        self.enter_expr = enter_expr
         self.true_lines = true_lines
         self.false_lines = false_lines
-        self.out_expr = out_expr
+        self.exit_expr = exit_expr
 
 class Loop:
     __slots__ = ['start_expr', 'lines', 'stop_expr']
@@ -218,8 +218,7 @@ class Parser():
         while True:
             if self.peak_kwd() in ('return', 'undoreturn'):
                 break
-            else:
-                func_lines.append(self.parse_function_line())
+            func_lines.append(self.parse_function_line())
         ln = self.get_line()
         func_undoreturn = ln[0] == 'undoreturn'
         func_return_params = ln[1:]
@@ -229,15 +228,18 @@ class Parser():
                             return_parameters=func_return_params,
                             undoreturn=func_undoreturn)
         return func_name, function
-        
-                        
     
     def parse_function_line(self):
         kwd = self.peak_kwd()
         if kwd in ('let', 'unlet'):
             return self.parse_assignment()
+        elif kwd == 'if':
+            return self.parse_if()
         elif kwd == 'print':
             return self.parse_print()
+        elif kwd in ('else', 'fi', 'return', 'undoreturn',
+                     'yrt', 'catch', 'until', 'unwith', 'yield'):
+            raise ParsingError(f"Reached unexpected {kwd}")
         else:
             return self.parse_modification()
         
@@ -264,6 +266,27 @@ class Parser():
                             op=binop,
                             expr=self.parse_expr(ln[2:]))
 
+    def parse_if(self):
+        ln = self.get_line()
+        enter_expr = self.parse_expr(ln[1:])
+        true_lines, false_lines = [], []
+        lines = true_lines
+        while True:
+            kwd = self.peak_kwd()
+            if kwd == 'fi':
+                break
+            elif kwd == 'else':
+                lines = false_lines
+                self.get_line()
+                continue
+            lines.append(self.parse_function_line())
+        ln = self.get_line()
+        exit_expr = self.parse_expr(ln[1:])
+        return If(enter_expr=enter_expr,
+                  true_lines=true_lines,
+                  false_lines=false_lines,
+                  exit_expr=exit_expr)
+        
     def parse_print(self):
         ln = self.get_line()
         return Print(arguments=ln[1:])
@@ -320,7 +343,7 @@ class Scope():
         self.run_Assignment(unassignment, backwards=not backwards)
 
     def run_If(self, if_, backwards=False):
-        expr = if_.out_expr if backwards else if_.in_expr
+        expr = if_.exit_expr if backwards else if_.enter_expr
         result = self.eval_expr(expr)
         lines = if_.true_lines if result else if_.false_lines
         self.run_lines(lines, backwards)
