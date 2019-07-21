@@ -1,7 +1,7 @@
 (setq railway-font-lock-keywords
       (let* (
-	     (x-keywords '("if" "else" "fi" "with" "yield"
-			   "unwith" "loop" "for" "until"
+	     (x-keywords '("if" "else" "fi" "do" "yield"
+			   "undo" "loop" "for" "until"
 			   "try" "catch" "yrt"))
             (x-types '("let" "unlet"))
             (x-constants '())
