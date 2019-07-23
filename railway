@@ -1,19 +1,25 @@
 #!/usr/bin/env python3.7
 
+from collections import deque
 from fractions import Fraction as Frac
+import re
 import sys
 
+# ------------------------------ Errors ------------------------------ #
 
 class RailwayError(RuntimeError): pass
 class ExistsError(RailwayError): pass
 class ParsingError(RailwayError): pass
 class LetError(RailwayError): pass
 class UnletError(RailwayError): pass
+class ModificationError(RailwayError): pass
 class LoopAssertError(RailwayError): pass
 class MemAccessError(RailwayError): pass
 class ZeroMultiplicationError(RailwayError): pass
 class ZeroDivisionError(RailwayError): pass
 class InformationLeakError(RailwayError): pass
+
+# ------------------------------ Operations ------------------------------ #
 
 def BINOP_ADD(a, b):
     return a + b
@@ -23,7 +29,9 @@ def BINOP_MUL(a, b):
     return a * b
 def BINOP_DIV(a, b):
     return a / b
-def BINOP_INTDIV(a, b):
+def BINOP_POW(a, b):
+    return a ** b
+def BINOP_IDIV(a, b):
     return a // b
 def BINOP_MOD(a, b):
     return a % b
@@ -51,6 +59,7 @@ def OP_NOT(a):
     return Frac(not a)
 def OP_NEG(a):
     return -a
+UNARY_OPS = (OP_NOT, OP_NEG)
 
 MODOP_ADD = BINOP_ADD
 MODOP_SUB = BINOP_SUB
@@ -70,10 +79,33 @@ MODOP_inverter = {
     MODOP_DIV: MODOP_MUL,
     MODOP_XOR: MODOP_XOR
 }
+token_to_MODOP = {
+    '+=': MODOP_ADD,
+    '-=': MODOP_SUB,
+    '*=': MODOP_MUL,
+    '/=': MODOP_DIV
+}
+BINOPS = [('**', BINOP_POW,   1),
+          ('*',  BINOP_MUL,   2),
+          ('/',  BINOP_DIV,   2),
+          ('//', BINOP_IDIV,  2),
+          ('%',  BINOP_MOD,   2),
+          ('+',  BINOP_ADD,   3),
+          ('-',  BINOP_SUB,   3),
+          ('<',  BINOP_LESS,  4),
+          ('<=', BINOP_LEQ,   4),
+          ('>',  BINOP_GREAT, 4),
+          ('>=', BINOP_GEQ,   4),
+          ('=',  BINOP_EQ,    4),
+          ('!=', BINOP_NEQ,   4),
+          ('^',  BINOP_XOR,   5),
+          ('|',  BINOP_OR,    5),
+          ('&',  BINOP_AND,   5)]
+token_to_BINOP = dict(x[:2] for x in BINOPS)
+BINOP_order = dict(x[1:] for x in BINOPS)
 
+# ------------------------------ Objects ------------------------------ #
 
-
-# -------------------- Objects -------------------- #
 class Variable:
 
     __slots__ = ['memory', 'length']
@@ -107,7 +139,7 @@ class Function:
         self.undoreturn = undoreturn
 
 
-# -------------------- Lines -------------------- #    
+# ------------------------------ Statements ------------------------------ #    
 
 class Modification:
     __slots__ = ['lval', 'op', 'unop', 'expr']
@@ -150,7 +182,14 @@ class Swap:
         self.lval = lval
         self.rval = rval
 
-class Func:
+class Call:
+    __slots__ = ['lvals', 'func', 'arguments']
+    def __init__(self, lvals, func, arguments):
+        self.lvals = lvals
+        self.func = func
+        self.arguments = arguments
+
+class Uncall:
     __slots__ = ['lvals', 'func', 'arguments']
     def __init__(self, lvals, func, arguments):
         self.lvals = lvals
@@ -163,6 +202,9 @@ class Print:
         self.arguments = arguments
 
 
+# ------------------------------ Parser ------------------------------ #
+
+NUMBER_REGEX = re.compile('\d+(\/\d+)?')
 
 class Parser():
     def __init__(self):
@@ -174,6 +216,10 @@ class Parser():
             ln = next(self.line_generator)
             ln = ln.replace('(', ' ( ').replace(')', ' ) ')
             ln = ln.replace('{', ' ').replace('}', ' ')
+            ln = ln.replace('-=', '=SUB=').replace(
+                '-', ' - ').replace('=SUB=', '-=')
+            ln = ln.replace('!=', '=NOT=').replace(
+                '!', ' ! ').replace('=NOT=', '!=')
             ln = ln.strip().split()
         if ln[-1] == '\\':
             ln = ln[:-1] + self.get_line()
@@ -185,24 +231,24 @@ class Parser():
         except IndexError:
             return self._get_line()
 
-    def peak_kwd(self):
+    def peek_kwd(self):
         if not self.lines_buffer:
             ln = self._get_line()
             self.lines_buffer.append(ln)
         return self.lines_buffer[0][0]
-    
+        
     def parse(self, line_generator):
         self.line_generator = line_generator
         functions = {}
         while True:
             try:
-                kwd = self.peak_kwd()
+                kwd = self.peek_kwd()
             except StopIteration:
                 break
             if kwd == 'func':
                 n, f = self.parse_func()
                 if n in functions:
-                    raise ExistsError(f"func {n} already defined")
+                    raise ExistsError(f'func {n} already defined')
                 functions[n] = f
             elif kwd == 'global':
                 self.parse_global()
@@ -216,7 +262,7 @@ class Parser():
         func_params = ln[2:]
         func_lines = []
         while True:
-            if self.peak_kwd() in ('return', 'undoreturn'):
+            if self.peek_kwd() in ('return', 'undoreturn'):
                 break
             func_lines.append(self.parse_function_line())
         ln = self.get_line()
@@ -230,7 +276,7 @@ class Parser():
         return func_name, function
     
     def parse_function_line(self):
-        kwd = self.peak_kwd()
+        kwd = self.peek_kwd()
         if kwd in ('let', 'unlet'):
             return self.parse_assignment()
         elif kwd == 'if':
@@ -239,12 +285,99 @@ class Parser():
             return self.parse_print()
         elif kwd in ('else', 'fi', 'return', 'undoreturn',
                      'yrt', 'catch', 'until', 'unwith', 'yield'):
-            raise ParsingError(f"Reached unexpected {kwd}")
+            raise ParsingError(f'Reached unexpected {kwd}')
         else:
             return self.parse_modification()
         
     def parse_expr(self, expr):
-        return Frac(3)
+        if len(expr) == 0:
+            raise ParsingError('Encountered empty expression')
+        expr_lvl1 = []
+        unary_ops = []
+        depth = 0
+        expecting_binop = False
+        current_block = expr_lvl1
+        for token in expr:
+            # Handle extracting unary operations
+            if depth == 0:
+                if expecting_binop:
+                    if token not in token_to_BINOP:
+                        raise ParsingError(
+                            f'Expected binary operator, got {token}')
+                    expecting_binop = False
+                    unary_ops.append(None)
+                elif token in ('-', '!'):
+                    unary_ops.append(OP_NOT if token is '!' else OP_NEG)
+                    continue
+                else:
+                    unary_ops.append(None)
+                    expecting_binop = True
+                    
+            # Handle nesting
+            if token == '(':
+                if depth == 0:
+                    current_block = []
+                else:
+                    current_block.append(token)
+                depth += 1
+            elif token == ')':
+                depth -= 1
+                if depth < 0:
+                    raise ParsingError('Unmatched parenthesis')
+                elif depth == 0:
+                    expr_lvl1.append(current_block)
+                    current_block = expr_lvl1
+                else:
+                    current_block.append(token)
+            else:
+                current_block.append(token)
+
+        if (len(expr_lvl1) % 2) != 1 or len(expr_lvl1) != len(unary_ops):
+            ParsingError('Malformed expression')
+
+        # Turn tokens into objects
+        binops = deque(token_to_BINOP[t] for t in expr_lvl1[1::2])
+        subexprs = deque()
+        for subexpr, unary_op in zip(expr_lvl1[::2], unary_ops[::2]):
+            if isinstance(subexpr, list):
+                # Sub-expression
+                s = self.parse_expr(subexpr)
+            elif NUMBER_REGEX.fullmatch(subexpr) is not None:
+                # Literal
+                s = Frac(subexpr)
+            elif subexpr.replace('_', '').isalnum():
+                # Variable
+                s = subexpr
+            else:
+                raise ParsingError(f'Malformed subexpr {subexpr}')
+            if unary_op is not None:
+                s = (unary_op, s)
+            subexprs.append(s)
+        
+        # Turn object list into object tree
+        while len(binops) > 0:
+            new_binops, new_subexprs = deque(), deque()
+            current_subexpr = subexprs.popleft()
+            current_binop = binops.popleft()
+            
+            while binops:
+                next_binop = binops.popleft()
+                if BINOP_order[current_binop] > BINOP_order[next_binop]:
+                    new_subexprs.append(current_subexpr)
+                    new_binops.append(current_binop)
+                    current_subexpr = subexprs.popleft()
+                else:
+                    current_subexpr = (current_binop,
+                                       current_subexpr,
+                                       subexprs.popleft())
+                current_binop = next_binop
+            new_subexprs.append((current_binop,
+                                     current_subexpr,
+                                     subexprs.popleft()))
+            binops = new_binops
+            subexprs = new_subexprs
+        return subexprs.pop()
+
         
     def parse_assignment(self):
         ln = self.get_line()
@@ -255,15 +388,15 @@ class Parser():
         
     def parse_modification(self):
         ln = self.get_line()
-        MODOP_lookup = {'+=': MODOP_ADD,
-                        '-=': MODOP_SUB,
-                        '*=': MODOP_MUL,
-                        '/=': MODOP_DIV}
-        if ln[1] not in MODOP_lookup:
-            raise ParsingError(f"Unrecognised mod-op {ln[1]}")
-        binop = MODOP_lookup[ln[1]]
+        lval, modop_name, expr_tokens = ln[0], ln[1], ln[2:]
+        if modop_name not in token_to_MODOP:
+            raise ParsingError(f'Unrecognised mod-op {modop_name}')
+        modop = token_to_MODOP[modop_name]
+        if lval in expr_tokens:
+            raise ModificationError(
+                f'{lval} appears on left and right of modification')
         return Modification(lval=ln[0],
-                            op=binop,
+                            op=modop,
                             expr=self.parse_expr(ln[2:]))
 
     def parse_if(self):
@@ -272,7 +405,7 @@ class Parser():
         true_lines, false_lines = [], []
         lines = true_lines
         while True:
-            kwd = self.peak_kwd()
+            kwd = self.peek_kwd()
             if kwd == 'fi':
                 break
             elif kwd == 'else':
@@ -292,7 +425,7 @@ class Parser():
         return Print(arguments=ln[1:])
             
 
-        
+# ------------------------------ Interpreter ------------------------------ #
 
 class Scope():
     globals = {}
@@ -306,9 +439,13 @@ class Scope():
             return expr
         if isinstance(expr, str):  # Variable name
             return self.locals[expr].get()
-        if isinstance(expr, tuple):  # Binary operation
-            op, exp1, exp2 = expr
-            return op(self.eval_expr(exp1), self.eval_expr(exp2))
+        if isinstance(expr, tuple):  # Operation
+            if len(expr) == 3:  # Binary Op
+                op, exp1, exp2 = expr
+                return op(self.eval_expr(exp1), self.eval_expr(exp2))
+            else:  # Unary Op
+                op, subexpr = expr
+                return op(self.eval_expr(subexpr))
 
     def run_lines(self, lines, backwards=False):
         if backwards:
@@ -336,7 +473,8 @@ class Scope():
                 raise ExistsError(f'Variable {lval} does not exist')
             rval = self.eval_expr(assignment.expr)
             if self.locals[lval].get() != rval:
-                raise UnletError(f'Variable {lval} has value {self.locals[lval].get()}, not {rval}')
+                raise UnletError(f'Variable {lval} has value '
+                                 f'{self.locals[lval].get()}, not {rval}')
             del self.locals[lval]
 
     def run_Unassignment(self, unassignment, backwards=False):
@@ -352,7 +490,8 @@ class Scope():
         assertion = loop.stop_expr if backwards else loop.start_expr
         test = loop.start_expr if backwards else loop.stop_expr
         if not self.eval_expr(assertion):
-            raise LoopAssertionError(f'{assertion} is not true before entering loop')
+            raise LoopAssertionError(
+                f'{assertion} is not true before entering loop')
         while not self.eval_expr(test):
             self.run_lines(loop.lines, backwards)
 
@@ -362,48 +501,53 @@ class Scope():
         l, r = lval.get(), rval.get()
         lval.set(r), rval.set(l)
         
-    def run_Func(self, func_call, backwards=False):
-        func_obj = func_call.func
+    def run_Call(self, call, backwards=False):
+        func = call.func
         
-        if backwards and func_obj.undoreturn:
-            for name in func_call.lvals:
+        if backwards and func.undoreturn:
+            for name in call.lvals:
                 del self.locals[name]
 
         elif backwards:
-            args = [self.resolve_var(k) for k in func_call.arguments]
-            new_locals = dict(zip(func_obj.parameters, args))
-            args = [self.resolve_var(k) for k in func_call.lvals]
-            new_locals.update(dict(zip(func_obj.return_parameters, args)))
+            args = [self.resolve_var(k) for k in call.arguments]
+            new_locals = dict(zip(func.parameters, args))
+            args = [self.resolve_var(k) for k in call.lvals]
+            new_locals.update(dict(zip(func.return_parameters, args)))
             subscope = Scope(locals=new_locals)
-            subscope.run_lines(func_obj.lines, backwards=True)
+            subscope.run_lines(func.lines, backwards=True)
             return_vars = [subscope.resolve_var(var)
-                           for var in func_obj.parameters]
-            for v in subscope.locals:
-                if v not in func_obj.parameters and v not in func_obj.return_parameters:
-                    raise InformationLeakError(
-                        f"Function {func_obj.name} returned but {v} persists")
-            for name in func_call.lvals:
+                           for var in func.parameters]
+            if any((v not in func.parameters and
+                    v not in func.return_parameters)
+                   for v in subscope.locals):
+                raise InformationLeakError(
+                    f'Function {func.name} returned but {v} persists')
+            for name in call.lvals:
                 del self.locals[name]
 
         else:
-            func_obj = func_call.func
-            args = [self.resolve_var(k) for k in func_call.arguments]
-            new_locals = dict(zip(func_obj.parameters, args))
+            func = call.func
+            args = [self.resolve_var(k) for k in call.arguments]
+            new_locals = dict(zip(func.parameters, args))
             subscope = Scope(locals=new_locals)
-            subscope.run_lines(func_obj.lines)
-            if func_obj.undoreturn:
+            subscope.run_lines(func.lines)
+            if func.undoreturn:
                 return_vars = [subscope.resolve_var(var).copy()
-                              for var in func_obj.return_parameters]
-                subscope.run_lines(func_obj.lines, backwards=True)
+                              for var in func.return_parameters]
+                subscope.run_lines(func.lines, backwards=True)
             else:
                 return_vars = [subscope.resolve_var(var)
-                               for var in func_obj.return_parameters]
-                for v in subscope.locals:
-                    if v not in func_obj.parameters and v not in func_obj.return_parameters:
-                        raise InformationLeakError(
-                            f"Function {func_obj.name} returned but {v} persists")
-            self.locals.update(dict(zip(func_call.lvals, return_vars)))
+                               for var in func.return_parameters]
+                if any((v not in func.parameters and
+                        v not in func.return_parameters)
+                       for v in subscope.locals):
+                    raise InformationLeakError(
+                        f'Function {func.name} returned but {v} persists')
+            self.locals.update(dict(zip(call.lvals, return_vars)))
 
+    def run_Uncall(self, uncall, backwards=False):
+        raise NotImplementedError()
+    
     def run_Print(self, print_, backwards=False):
         vals = [str(self.resolve_var(arg).get())
                 for arg in print_.arguments]
@@ -414,7 +558,7 @@ class Scope():
             return self.locals[lval]
         if lval in Scope.globals:
             return Scope.globals[lval]
-        raise ExistsError(f"Variable {lval} does not exist")
+        raise ExistsError(f'Variable {lval} does not exist')
             
         
         
@@ -430,8 +574,8 @@ if __name__ == '__main__':
     Scope.functions = functions
     interpreter = Scope()
     interpreter.locals = {'argc': None, 'argv': None}
-    main_call = Func([], functions['main'], [])
-    interpreter.run_Func(main_call)
+    main_call = Call([], functions['main'], [])
+    interpreter.run_Call(main_call)
     quit()
         
     S = Scope()
@@ -469,7 +613,7 @@ if __name__ == '__main__':
         undoreturn=False)
     
     func_lines = [Assignment('X', Frac(10)),
-                  Func(lvals=['Y'],
+                  Call(lvals=['Y'],
                        func=function,
                        arguments=['X']),
                   Unassignment('X', Frac(10))]

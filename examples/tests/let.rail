@@ -2,7 +2,9 @@
 func main {argc argv}
   let x = 1
   x += 10
+  let y = x
+  x -= 2 + y / 4
   print x
-  x -= 2
-  unlet x = 9
+  unlet y = 11
+  unlet x = 25/4
 return
