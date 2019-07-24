@@ -4,6 +4,7 @@ from collections import deque
 from fractions import Fraction as Frac
 import re
 import sys
+from tokenize import tokenize
 
 # ------------------------------ Errors ------------------------------ #
 
@@ -205,25 +206,28 @@ class Print:
 # ------------------------------ Parser ------------------------------ #
 
 NUMBER_REGEX = re.compile('\d+(\/\d+)?')
+accepted_tokens = set((
+    1,  # name
+    2,  # number
+    53  # op
+))
+
 
 class Parser():
+    
     def __init__(self):
         self.lines_buffer = []
 
     def _get_line(self):
-        ln = False  # []
-        while not ln:
-            ln = next(self.line_generator)
-            ln = ln.replace('(', ' ( ').replace(')', ' ) ')
-            ln = ln.replace('{', ' ').replace('}', ' ')
-            ln = ln.replace('-=', '=SUB=').replace(
-                '-', ' - ').replace('=SUB=', '-=')
-            ln = ln.replace('!=', '=NOT=').replace(
-                '!', ' ! ').replace('=NOT=', '!=')
-            ln = ln.strip().split()
-        if ln[-1] == '\\':
-            ln = ln[:-1] + self.get_line()
-        return ln
+        out_line = []
+        while not out_line:
+            while True:
+                t = next(self.tokens)
+                if t[0] == 4:  # Newline token
+                    break
+                if t[0] in accepted_tokens:
+                    out_line.append(t[1])
+        return out_line
     
     def get_line(self):
         try:
@@ -238,7 +242,7 @@ class Parser():
         return self.lines_buffer[0][0]
         
     def parse(self, line_generator):
-        self.line_generator = line_generator
+        self.tokens = tokenize(lambda: line_generator.readline())
         functions = {}
         while True:
             try:
@@ -569,7 +573,7 @@ if __name__ == '__main__':
         print(f'USAGE: {sys.argv[0]} filename.r')
         sys.exit()
         
-    with open(sys.argv[1], 'r') as f:
+    with open(sys.argv[1], 'rb') as f:
         functions = Parser().parse(f)
     Scope.functions = functions
     interpreter = Scope()
