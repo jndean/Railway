@@ -1,18 +1,17 @@
 
-module = import* global* file* func_decl* ;
+module = {import} {global} {file} {func_decl} ;
 
-import = "import" string ["as" [name]]
+import = "import" string ["as" [name]] ;
 global = "global" variable "=" expression ;
 file = "file" name "=" string ;
 
-func_decl = "func" func_name "(" [parameter]  (","  parameter)* ")" "\n"
-            statement*
+func_decl = "func" func_name "(" [parameter]  {","  parameter} ")" "\n"
+            {statement}
             "return" [variable] "\n" ;
 
-statement = [let_stmt | unlet_stmt | if_stmt | loop_stmt |
-            for_stmt | push_stmt | pop_stmt | swap_stmt |
-	    do_stmt | mod_stmt | try_stmt | catch_stmt |
-	    call_stmt] "\n" ;
+statement = [let_stmt | unlet_stmt | if_stmt | loop_stmt | for_stmt |
+             push_stmt | pop_stmt | swap_stmt | do_stmt | mod_stmt |
+	     try_stmt | catch_stmt | call_stmt] "\n" ;
 
 let_stmt = "let" variable "=" expression ;
 
@@ -27,31 +26,31 @@ pop_stmt = "pop" (variable "<=" variable) |
 swap_stmt = "swap" variable "<=>" variable ;
 
 if_stmt = "if" "(" expression ")" "\n"
-          statement*
-	  ["else" "\n" statement*]
+          {statement}
+	  ["else" "\n" {statement}]
 	  "fi" ["(" expression ")"] ;
 
 loop_stmt = "loop" "(" expression ")" "\n"
-            statement*
+            {statement}
 	    "while" "(" expression ")" ;
 
 for_stmt = "for" "(" name "=" expression ")" "\n"
-            statement*
+            {statement}
 	    "rof" "(" name "=" expression ")" ;
 
 do_stmt = "do" "\n"
-          statement*
+          {statement}
 	  "yield" "\n"
-	  yieldable_stmt*
+	  {yieldable_stmt}
 	  "undo" ;
 	  
 yieldable_statement = [let_stmt | unlet_stmt | print_stmt] "\n" ;
 
 try_stmt = "try" "(" name "in" expression ")" "\n"
-           statement*
-	   "yrt"
+           {statement}
+	   "yrt" ;
 
-catch_stmt = "catch" "(" expression ")"
+catch_stmt = "catch" "(" expression ")" ;
 
 mod_stmt = variable "+=" expression
          | variable "-=" expression
@@ -60,13 +59,13 @@ mod_stmt = variable "+=" expression
 	 
 call_stmt = "call" ["{" expression "}"]
             [variable "="] func_name
-	    "(" [argument] (',' argument)* ")" ;
+	    "(" [argument] {',' argument} ")" ;
 
-argument = ["@"] ["."] name ("[" expression "]")* ;
+argument = ["@"] ["."] name {"[" expression "]"} ;
 
 parameter = ["@"] ["."] name ;
 
-variable = ["."] name ("[" expression "]")* ;
+variable = ["."] name {"[" expression "]"} ;
 
 expression = number
            | ['#'] variable
