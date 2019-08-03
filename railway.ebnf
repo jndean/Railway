@@ -1,0 +1,97 @@
+
+module = import* global* file* func_decl* ;
+
+import = "import" string ["as" [name]]
+global = "global" variable "=" expression ;
+file = "file" name "=" string ;
+
+func_decl = "func" func_name "(" [parameter]  (","  parameter)* ")" "\n"
+            statement*
+            "return" [variable] "\n" ;
+
+statement = [let_stmt | unlet_stmt | if_stmt | loop_stmt |
+            for_stmt | push_stmt | pop_stmt | swap_stmt |
+	    do_stmt | mod_stmt | try_stmt | catch_stmt |
+	    call_stmt] "\n" ;
+
+let_stmt = "let" variable "=" expression ;
+
+unlet_stmt = "unlet" variable "=" expression ;
+
+push_stmt = "push" (variable "=>" variable) |
+	    	   (variable "<=" variable) ;
+
+pop_stmt = "pop" (variable "<=" variable) |
+    	   (variable "=>" variable) ;
+
+swap_stmt = "swap" variable "<=>" variable ;
+
+if_stmt = "if" "(" expression ")" "\n"
+          statement*
+	  ["else" "\n" statement*]
+	  "fi" ["(" expression ")"] ;
+
+loop_stmt = "loop" "(" expression ")" "\n"
+            statement*
+	    "while" "(" expression ")" ;
+
+for_stmt = "for" "(" name "=" expression ")" "\n"
+            statement*
+	    "rof" "(" name "=" expression ")" ;
+
+do_stmt = "do" "\n"
+          statement*
+	  "yield" "\n"
+	  yieldable_stmt*
+	  "undo" ;
+	  
+yieldable_statement = [let_stmt | unlet_stmt | print_stmt] "\n" ;
+
+try_stmt = "try" "(" name "in" expression ")" "\n"
+           statement*
+	   "yrt"
+
+catch_stmt = "catch" "(" expression ")"
+
+mod_stmt = variable "+=" expression
+         | variable "-=" expression
+         | variable "*=" expression
+         | variable "/=" expression ;
+	 
+call_stmt = "call" ["{" expression "}"]
+            [variable "="] func_name
+	    "(" [argument] (',' argument)* ")" ;
+
+argument = ["@"] ["."] name ("[" expression "]")* ;
+
+parameter = ["@"] ["."] name ;
+
+variable = ["."] name ("[" expression "]")* ;
+
+expression = number
+           | ['#'] variable
+	   | '(' expression ')'
+           | expression "+" expression
+	   | expression "-" expression
+	   | expression "*" expression
+	   | expression "/" expression
+	   | expression "//" expression
+	   | expression "**" expression
+	   | expression "%" expression
+	   | expression "^" expression
+	   | expression "|" expression
+	   | expression "&" expression
+	   | expression "<=" expression
+	   | expression ">=" expression
+	   | expression "!=" expression
+	   | expression "=" expression
+	   | expression "<" expression
+	   | expression ">" expression ;
+
+func_name = ['~'] name ;
+
+name = "[a-zA-Z_][a-zA-Z0-9_.]*" ;
+
+string = "\"[^\"]*\"" ;
+
+number = "\d+(\/\d+)?" ;
