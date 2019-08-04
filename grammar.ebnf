@@ -64,6 +64,8 @@ call_stmt = "call" ["{" expression "}"]
 array_initialiser = "[" expression "for" name "in"
                      "[" number ["," number ["," number]] "]" "]" ;
 
+print_stmt = "print" "(" variable {"," variable} ")" ;
+
 argument = ["@"] ["."] name {"[" expression "]"} ;
 
 parameter = ["@"] ["."] name ;
