@@ -13,9 +13,9 @@ statement = [let_stmt | unlet_stmt | if_stmt | loop_stmt | for_stmt |
              push_stmt | pop_stmt | swap_stmt | do_stmt | mod_stmt |
 	     try_stmt | catch_stmt | call_stmt] "\n" ;
 
-let_stmt = "let" variable "=" expression ;
+let_stmt = "let" variable "=" (expression | array_initialiser) ;
 
-unlet_stmt = "unlet" variable "=" expression ;
+unlet_stmt = "unlet" variable "=" (expression | array_initialiser) ;
 
 push_stmt = "push" (variable "=>" variable) |
 	    	   (variable "<=" variable) ;
@@ -46,7 +46,7 @@ do_stmt = "do" "\n"
 	  
 yieldable_statement = [let_stmt | unlet_stmt | print_stmt] "\n" ;
 
-try_stmt = "try" "(" name "in" expression ")" "\n"
+try_stmt = "try" "(" name "in" variable | array_initialiser ")" "\n"
            {statement}
 	   "yrt" ;
 
@@ -60,6 +60,9 @@ mod_stmt = variable "+=" expression
 call_stmt = "call" ["{" expression "}"]
             [variable "="] func_name
 	    "(" [argument] {',' argument} ")" ;
+
+array_initialiser = "[" expression "for" name "in"
+                     "[" number ["," number ["," number]] "]" "]" ;
 
 argument = ["@"] ["."] name {"[" expression "]"} ;
 
