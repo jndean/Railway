@@ -11,7 +11,7 @@ func_decl = "func" func_name "(" [parameter]  {","  parameter} ")" "\n"
 
 statement = [let_stmt | unlet_stmt | if_stmt | loop_stmt | for_stmt |
              push_stmt | pop_stmt | swap_stmt | do_stmt | mod_stmt |
-	     try_stmt | catch_stmt | call_stmt] "\n" ;
+	     try_stmt | catch_stmt | call_stmt | print_stmt] "\n" ;
 
 let_stmt = "let" variable "=" (expression | array_initialiser) ;
 
@@ -61,10 +61,10 @@ call_stmt = "call" ["{" expression "}"]
             [variable "="] func_name
 	    "(" [argument] {',' argument} ")" ;
 
+print_stmt = "print" "(" variable {"," variable} ")" ;
+
 array_initialiser = "[" expression "for" name "in"
                      "[" number ["," number ["," number]] "]" "]" ;
-
-print_stmt = "print" "(" variable {"," variable} ")" ;
 
 argument = ["@"] ["."] name {"[" expression "]"} ;
 
@@ -74,23 +74,15 @@ variable = ["."] name {"[" expression "]"} ;
 
 expression = number
            | ['#'] variable
-	   | '(' expression ')'
-           | expression "+" expression
-	   | expression "-" expression
-	   | expression "*" expression
-	   | expression "/" expression
-	   | expression "//" expression
-	   | expression "**" expression
-	   | expression "%" expression
-	   | expression "^" expression
-	   | expression "|" expression
-	   | expression "&" expression
-	   | expression "<=" expression
-	   | expression ">=" expression
-	   | expression "!=" expression
-	   | expression "=" expression
-	   | expression "<" expression
-	   | expression ">" expression ;
+	   | unary_op expression
+	   | expression binary_op expression
+	   | '(' expression ')' ;
+
+binary_op = "+" | "-" | "*" | "/" | "//" | "**" | "%" |
+            "^" | "|" | "&" | "<=" | ">=" | "!=" | "=" |
+	    "<" | ">" ;
+	    
+unary_op = "!" | "-" ;
 
 func_name = ['~'] name ;
 

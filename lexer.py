@@ -1,6 +1,20 @@
 import sys
 from rply import LexerGenerator
 
+__all__ = ["lexer", "all_tokens"]
+
+all_tokens = [
+    "IMPORT", "AS", "GLOBAL", "FILE", "LET", "UNLET", 'FUNC',
+    'RETURN', 'PRINT', 'IF', 'FI', 'ELSE', 'LOOP', 'WHILE',
+    'FOR', 'ROF', 'CALL', 'UNCALL', 'DO', 'UNDO', 'YIELD',
+    'SWAP', 'PUSH', 'POP', 'TRY', 'CATCH', 'IN', "LEQ", "GEQ",
+    "NEQ", "EQ", "LESS", "GREAT", "LRARROW", "RARROW",
+    "MODADD", "MODSUB", "MODMUL", "MODDIV", "ADD", "SUB",
+    "IDIV", "DIV", "MUL", "POW", "MOD", "XOR", "OR", "AND",
+    "LPAREN", "RPAREN", "LSQUARE", "RSQUARE", "LBRACK",
+    "RBRACK", "COMMA", "MONO", "LEN", "NOT", "SWITCH", "NUMBER",
+    "NAME", "STRING", "COMMENT", "NEWLINE"]
+
 lg = LexerGenerator()
 
 lg.add("IMPORT", r"import")
@@ -38,12 +52,12 @@ lg.add("EQ", r"\=")
 lg.add("LESS", r"\<")
 lg.add("GREAT", r"\>")
 
-lg.add("LR_ARROW", r"\<\=\>")
-lg.add("R_ARROW", r"\=\>")
-lg.add("MOD_ADD", r"\+\=")
-lg.add("MOD_SUB", r"\-\=")
-lg.add("MOD_MUL", r"\*\=")
-lg.add("MOD_DIV", r"\/\=")
+lg.add("LRARROW", r"\<\=\>")
+lg.add("RARROW", r"\=\>")
+lg.add("MODADD", r"\+\=")
+lg.add("MODSUB", r"\-\=")
+lg.add("MODMUL", r"\*\=")
+lg.add("MODDIV", r"\/\=")
 
 lg.add("ADD", r"\+")
 lg.add("SUB", r"-")
@@ -68,12 +82,13 @@ lg.add("COMMA", r"\,")
 # Symbols with special meaning
 lg.add("MONO", r"\.")
 lg.add("LEN", r"#")
+lg.add("NOT", r"!")
 lg.add("SWITCH", r"~")
 
 lg.add("NUMBER", r"\d+(\/\d+)?")
 lg.add("NAME", r"[a-zA-Z][a-zA-Z0-9_.]*")
 lg.add("STRING", r"\"[^\"]*\"")
-lg.add("COMMENT", r"\/\/[^\n]*")
+lg.add("COMMENT", r"%[^%]*%")
 lg.add("NEWLINE", r"\n")
 
 # Escape newlines
