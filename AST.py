@@ -53,7 +53,6 @@ class Binop():
         self.lhs = lhs
         self.op = globals()["BINOP_" + op_token]
         self.rhs = rhs
-        print(lhs, op_token, rhs)
 
 
 class Uniop():
@@ -69,13 +68,53 @@ class Uniop():
     def __init__(self, op_token, expr):
         self.op = globals()["UNIOP_" + op_token]
         self.expr = expr
-        print(op_token, expr)
 
 
 class Variable():
-    __slots__ = ["name", "index_expr", "ismono"]
+    __slots__ = ["name", "index", "ismono"]
 
-    def __init__(self, name, index_expr, ismono):
+    def __init__(self, name, index, ismono):
         self.name = name
-        self.index_expr = index_expr
+        self.index = index
         self.ismono = ismono
+
+
+class Length():
+    __slots__ = ["variable"]
+
+    def __init__(self, variable):
+        self.variable = variable
+
+
+"""class ArrayGen():
+    __slots__ = ["generator", "name", "expr"]
+
+    def __init__(self, generator, name=None, expr=None):
+        self.generator = generator
+        def gen(name, expr)"""
+
+
+
+def display(node, indent=0):
+    start = '  |' * indent + '->'
+    indent += 1
+
+    if isinstance(node, Fraction):
+        print(start, str(node))
+
+    elif isinstance(node, Binop):
+        print(start, node.op.__name__)
+        display(node.lhs, indent)
+        display(node.rhs, indent)
+
+    elif isinstance(node, Uniop):
+        print(start, node.op.__name__)
+        display(node.expr, indent)
+
+    elif isinstance(node, Variable):
+        print(start, node.name + '[]' * len(node.index),
+              "(ismono)" if node.ismono else "")
+
+    elif isinstance(node, Length):
+        print(start, "Length")
+        display(node.variable, indent)

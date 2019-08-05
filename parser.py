@@ -54,24 +54,64 @@ def expression_parentheses(p):
     return p[1]
 
 
+@pgen.production('expression : variable')
+@pgen.production('expression : LEN variable')
+def expression_variable(p):
+    variable = p.pop()
+    if p:
+        return AST.Length(variable)
+    return variable
+
+
 @pgen.production('expression : NOT expression')
 @pgen.production('expression : SUB expression')
 def expression_uniop(p):
-    op, expr = p
+    op, arg = p
     op_token = op.gettokentype()
-    return AST.Uniop(op_token, expr)
+    return AST.Uniop(op_token, arg)
 
 
 # -------------------- variable -------------------- #
 
-@pgen.production('variable : NAMELPAREN expression RPAREN')
-def expression_parentheses(p):
-    return p[1]
+@pgen.production('variable : NAME')
+@pgen.production('variable : MONO NAME')
+@pgen.production('variable : NAME index')
+@pgen.production('variable : MONO NAME index')
+def variable_name(p):
+    if p[0].gettokentype() == "MONO":
+        ismono = True
+        p.pop(0)
+    else:
+        ismono = False
+    name = p.pop(0).getstr()
+    index = p.pop() if p else tuple()
+    return AST.Variable(name, index, ismono)
 
 
+@pgen.production('index : LSQUARE expression RSQUARE')
+@pgen.production('index : LSQUARE expression RSQUARE index')
+def index_expression(p):
+    if len(p) == 4:
+        return (p[1],) + p[3]
+    return (p[1],)
+
+
+# -------------------- arraygen -------------------- #
+
+@pgen.production('arraygen : LSQUARE expression FOR NAME IN arraygen RSQUARE')
+@pgen.production('arraygen : LSQUARE expression RSQUARE')
+@pgen.production('arraygen : LSQUARE expression COMMA expression RSQUARE')
+@pgen.production('arraygen : LSQUARE expression COMMA expression COMMA '
+                 'expression RSQUARE')
+def arraygen(p):
+    if p[2].gettokentype() == 'for':
+        pass
+
+
+# -------------------- Build and Test -------------------- #
 
 parser = pgen.build()
 
 if __name__ == "__main__":
     with open(sys.argv[1], 'r') as f:
-        print(parser.parse(lexer.lex(f.read())))
+        AST.display(parser.parse(lexer.lex(f.read())))
