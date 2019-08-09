@@ -92,9 +92,9 @@ lg.add("COMMENT", r"%[^%]*%")
 lg.add("NEWLINE", r"\n")
 
 # Escape newlines
-lg.ignore(r'\\[ \t\r\f\v]*\n')
+lg.ignore(r"\\[ \t\r\f\v]*\n")
 # Whitespace
-lg.ignore(r'[ \t\r\f\v]+')
+lg.ignore(r"[ \t\r\f\v]+")
 
 lexer = lg.build()
 

@@ -97,7 +97,7 @@ def index_expression(p):
 
 
 # -------------------- arraygen -------------------- #
-
+"""
 @pgen.production('arraygen : LSQUARE expression FOR NAME IN arraygen RSQUARE')
 @pgen.production('arraygen : LSQUARE expression RSQUARE')
 @pgen.production('arraygen : LSQUARE expression COMMA expression RSQUARE')
@@ -105,7 +105,44 @@ def index_expression(p):
                  'expression RSQUARE')
 def arraygen(p):
     if p[2].gettokentype() == 'for':
-        pass
+        pass"""
+
+
+# -------------------- let unlet -------------------- #
+
+#@pgen.production('let : LET variable EQ arraygen')
+@pgen.production('let : LET variable')
+@pgen.production('let : LET variable EQ expression')
+def let(p):
+    rhs = Fraction(0) if len(p) == 2 else p[3]
+    variable = p[1]
+    return AST.Let(variable, rhs)
+
+
+#@pgen.production('unlet : UNLET variable EQ arraygen')
+@pgen.production('unlet : UNLET variable')
+@pgen.production('unlet : UNLET variable EQ expression')
+def unlet(p):
+    rhs = Fraction(0) if len(p) == 2 else p[3]
+    variable = p[1]
+    return AST.Unlet(variable, rhs)
+
+
+# -------------------- statements -------------------- #
+
+@pgen.production('stmt : let')
+@pgen.production('stmt : unlet')
+@pgen.production('statement : stmt NEWLINE')
+def statement(p):
+    return p[0]
+
+
+@pgen.production('statements : statement')
+@pgen.production('statements : statement statements')
+def statements(p):
+    if len(p) == 1:
+        return [p[0]]
+    return p[1] + [p[0]]
 
 
 # -------------------- Build and Test -------------------- #

@@ -86,13 +86,40 @@ class Length():
         self.variable = variable
 
 
+class Let():
+    __slots__ = ["variable", "rhs"]
+
+    def __init__(self, variable, rhs):
+        self.variable = variable
+        self.rhs = rhs
+
+
+class Unlet():
+    __slots__ = ["variable", "rhs"]
+
+    def __init__(self, variable, rhs):
+        self.variable = variable
+        self.rhs = rhs
+
+
+class Statements():
+    __slots__ = ["items", "isswitch"]
+
+    def __init__(self, items):
+        self.items = items
+        self.isswitch = any(hasattr(x, "isswitch") and x.isswitch
+                            for x in items)
+
+
 """class ArrayGen():
-    __slots__ = ["generator", "name", "expr"]
+    __slots__ = ["start_expr", "end_expr", "step_expr",
+                 "subarray", "name", "expr"]
 
-    def __init__(self, generator, name=None, expr=None):
+    def __init__(self, start_expr=None, end_expr=None, step_expr=None,
+                 subarray=None, name=None, expr=None):
         self.generator = generator
-        def gen(name, expr)"""
-
+        def gen(name, expr)
+"""
 
 
 def display(node, indent=0):
