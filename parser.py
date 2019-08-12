@@ -10,15 +10,119 @@ from lexer import lexer, all_tokens
 pgen = ParserGenerator(
     all_tokens,
     precedence=[
+        ('left', ['empty']),
+        ('left', ['statements']),
         ('left', ['OR']),
         ('left', ['AND']),
-        ('left', ['NOT']),
+        ('left', ['XOR']),
         ('left', ['LESS', 'LEQ', 'GREAT', 'GEQ', 'EQ', 'NEQ']),
         ('left', ['ADD', 'SUB']),
         ('left', ['MUL', 'DIV', 'IDIV', 'MOD']),
-        ('left', ['POW'])
+        ('left', ['POW']),
+        ('right', ['NOT', 'NEG'])
     ]
 )
+
+
+# -------------------- func decl -------------------- #
+
+@pgen.production('module : functions')
+def module(p):
+    return AST.Module(p[0])
+
+
+@pgen.production('functions : func_decl')
+@pgen.production('functions : func_decl functions')
+def functions(p):
+    if len(p) == 1:
+        return [p[0]]
+    return [p[0]] + p[1]
+
+
+# -------------------- func decl -------------------- #
+
+@pgen.production('func_decl : FUNC funcname LPAREN parameters RPAREN NEWLINE '
+                 '            statements RETURN varname NEWLINE')
+@pgen.production('func_decl : FUNC funcname LPAREN parameters RPAREN NEWLINE '
+                 '            statements RETURN NEWLINE')
+@pgen.production('func_decl : FUNC funcname LPAREN RPAREN NEWLINE '
+                 '            statements RETURN varname NEWLINE')
+@pgen.production('func_decl : FUNC funcname LPAREN RPAREN NEWLINE '
+                 '            statements RETURN NEWLINE')
+def func_decl(p):
+    p.pop(0)  # FUNC
+    name = p.pop(0)  # funcname
+    isswitch = (name[0] == '~')
+    p.pop(0)  # LPAREN
+    params = p.pop(0)  # parameters or RPAREN
+    if isinstance(params, list):
+        p.pop(0)  # RPAREN
+    else:
+        params = []
+    p.pop(0)  # NEWLINE
+    lines = p.pop(0)
+    p.pop(0)  # RETURN
+    retname = p.pop(0) if len(p) == 2 else None
+    return AST.Function(name=name,
+                        isswitch=isswitch,
+                        parameters=params,
+                        lines=lines,
+                        retname=retname)
+
+
+@pgen.production('parameters : parameter')
+@pgen.production('parameters : parameter COMMA parameters')
+def parameters(p):
+    if len(p) == 1:
+        return [p[0]]
+    return [p[0]] + p[2]
+
+
+@pgen.production('parameter : varname')
+@pgen.production('parameter : BORROWED varname')
+def parameter(p):
+    name = p.pop()
+    ismono = (name[0] == '.')
+    isborrowed = bool(p)
+    return AST.Parameter(name, isborrowed, ismono)
+
+
+# -------------------- statements -------------------- #
+
+@pgen.production('statements : statement')
+@pgen.production('statements : statement statements')
+def statements(p):
+    if not p:
+        return []
+    if len(p) == 1:
+        return [p[0]]
+    return [p[0]] + p[1]
+
+
+@pgen.production('stmt : let')
+@pgen.production('stmt : unlet')
+@pgen.production('statement : stmt NEWLINE')
+def statement(p):
+    return p[0]
+
+
+# -------------------- let unlet -------------------- #
+
+# #@pgen.production('let : LET variable EQ arraygen')
+@pgen.production('let : LET variable')
+@pgen.production('let : LET variable ASSIGN expression')
+def let(p):
+    rhs = Fraction(0) if len(p) == 2 else p[3]
+    variable = p[1]
+    return AST.Let(variable, rhs)
+
+# @pgen.production('unlet : UNLET variable EQ arraygen')
+@pgen.production('unlet : UNLET variable')
+@pgen.production('unlet : UNLET variable ASSIGN expression')
+def unlet1(p):
+    rhs = Fraction(0) if len(p) == 2 else p[3]
+    variable = p[1]
+    return AST.Unlet(variable, rhs)
 
 
 # -------------------- expression -------------------- #
@@ -64,7 +168,7 @@ def expression_variable(p):
 
 
 @pgen.production('expression : NOT expression')
-@pgen.production('expression : SUB expression')
+@pgen.production('expression : SUB expression', precedence='NEG')
 def expression_uniop(p):
     op, arg = p
     op_token = op.gettokentype()
@@ -73,17 +177,11 @@ def expression_uniop(p):
 
 # -------------------- variable -------------------- #
 
-@pgen.production('variable : NAME')
-@pgen.production('variable : MONO NAME')
-@pgen.production('variable : NAME index')
-@pgen.production('variable : MONO NAME index')
+@pgen.production('variable : varname')
+@pgen.production('variable : varname index')
 def variable_name(p):
-    if p[0].gettokentype() == "MONO":
-        ismono = True
-        p.pop(0)
-    else:
-        ismono = False
-    name = p.pop(0).getstr()
+    name = p.pop(0)
+    ismono = (name[0] == '.')
     index = p.pop() if p else tuple()
     return AST.Variable(name, index, ismono)
 
@@ -96,6 +194,16 @@ def index_expression(p):
     return (p[1],)
 
 
+# -------------------- names -------------------- #
+
+@pgen.production('varname : NAME')
+@pgen.production('varname : MONO NAME')
+@pgen.production('funcname : NAME')
+@pgen.production('funcname : SWITCH NAME')
+def index_expression(p):
+    return ''.join(x.getstr() for x in p)
+
+
 # -------------------- arraygen -------------------- #
 """
 @pgen.production('arraygen : LSQUARE expression FOR NAME IN arraygen RSQUARE')
@@ -106,44 +214,6 @@ def index_expression(p):
 def arraygen(p):
     if p[2].gettokentype() == 'for':
         pass"""
-
-
-# -------------------- let unlet -------------------- #
-
-#@pgen.production('let : LET variable EQ arraygen')
-@pgen.production('let : LET variable')
-@pgen.production('let : LET variable EQ expression')
-def let(p):
-    rhs = Fraction(0) if len(p) == 2 else p[3]
-    variable = p[1]
-    return AST.Let(variable, rhs)
-
-
-#@pgen.production('unlet : UNLET variable EQ arraygen')
-@pgen.production('unlet : UNLET variable')
-@pgen.production('unlet : UNLET variable EQ expression')
-def unlet(p):
-    rhs = Fraction(0) if len(p) == 2 else p[3]
-    variable = p[1]
-    return AST.Unlet(variable, rhs)
-
-
-# -------------------- statements -------------------- #
-
-@pgen.production('stmt : let')
-@pgen.production('stmt : unlet')
-@pgen.production('statement : stmt NEWLINE')
-def statement(p):
-    return p[0]
-
-
-@pgen.production('statements : statement')
-@pgen.production('statements : statement statements')
-def statements(p):
-    if len(p) == 1:
-        return [p[0]]
-    return p[1] + [p[0]]
-
 
 # -------------------- Build and Test -------------------- #
 

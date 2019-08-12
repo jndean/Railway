@@ -13,7 +13,7 @@ all_tokens = [
     "IDIV", "DIV", "MUL", "POW", "MOD", "XOR", "OR", "AND",
     "LPAREN", "RPAREN", "LSQUARE", "RSQUARE", "LBRACK",
     "RBRACK", "COMMA", "MONO", "LEN", "NOT", "SWITCH", "NUMBER",
-    "NAME", "STRING", "COMMENT", "NEWLINE"]
+    "NAME", "STRING", "COMMENT", "NEWLINE", "ASSIGN", "BORROWED"]
 
 lg = LexerGenerator()
 
@@ -48,7 +48,7 @@ lg.add('IN', r"in")
 lg.add("LEQ", r"\<\=")
 lg.add("GEQ", r"\>\=")
 lg.add("NEQ", r"\!\=")
-lg.add("EQ", r"\=")
+lg.add("EQ", r"\=\=")
 lg.add("LESS", r"\<")
 lg.add("GREAT", r"\>")
 
@@ -58,6 +58,7 @@ lg.add("MODADD", r"\+\=")
 lg.add("MODSUB", r"\-\=")
 lg.add("MODMUL", r"\*\=")
 lg.add("MODDIV", r"\/\=")
+lg.add("ASSIGN", r"\=")
 
 lg.add("ADD", r"\+")
 lg.add("SUB", r"-")
@@ -81,6 +82,7 @@ lg.add("COMMA", r"\,")
 
 # Symbols with special meaning
 lg.add("MONO", r"\.")
+lg.add("BORROWED", r"\@")
 lg.add("LEN", r"#")
 lg.add("NOT", r"!")
 lg.add("SWITCH", r"~")
@@ -89,7 +91,7 @@ lg.add("NUMBER", r"\d+(\/\d+)?")
 lg.add("NAME", r"[a-zA-Z][a-zA-Z0-9_.]*")
 lg.add("STRING", r"\"[^\"]*\"")
 lg.add("COMMENT", r"%[^%]*%")
-lg.add("NEWLINE", r"\n")
+lg.add("NEWLINE", r"\n+")
 
 # Escape newlines
 lg.ignore(r"\\[ \t\r\f\v]*\n")

@@ -39,7 +39,7 @@ def UNIOP_SUB(a):
     return -a
 
 
-class Binop():
+class Binop:
     __slots__ = ["lhs", "op", "rhs"]
 
     def __new__(cls, lhs, op_token, rhs):
@@ -55,7 +55,7 @@ class Binop():
         self.rhs = rhs
 
 
-class Uniop():
+class Uniop:
     __slots__ = ["op", "expr"]
 
     def __new__(cls, op_token, expr):
@@ -70,7 +70,7 @@ class Uniop():
         self.expr = expr
 
 
-class Variable():
+class Variable:
     __slots__ = ["name", "index", "ismono"]
 
     def __init__(self, name, index, ismono):
@@ -79,14 +79,23 @@ class Variable():
         self.ismono = ismono
 
 
-class Length():
+class Parameter:
+    __slots__ = ["name", "isborrowed", "ismono"]
+
+    def __init__(self, name, isborrowed, ismono):
+        self.name = name
+        self.isborrowed = isborrowed
+        self.ismono = ismono
+
+
+class Length:
     __slots__ = ["variable"]
 
     def __init__(self, variable):
         self.variable = variable
 
 
-class Let():
+class Let:
     __slots__ = ["variable", "rhs"]
 
     def __init__(self, variable, rhs):
@@ -94,7 +103,7 @@ class Let():
         self.rhs = rhs
 
 
-class Unlet():
+class Unlet:
     __slots__ = ["variable", "rhs"]
 
     def __init__(self, variable, rhs):
@@ -102,13 +111,31 @@ class Unlet():
         self.rhs = rhs
 
 
-class Statements():
+class Statements:
     __slots__ = ["items", "isswitch"]
 
     def __init__(self, items):
         self.items = items
         self.isswitch = any(hasattr(x, "isswitch") and x.isswitch
                             for x in items)
+
+
+class Function:
+    __slots__ = ["name", "isswitch", "parameters", "lines", "retname"]
+
+    def __init__(self, name, isswitch, parameters, lines, retname):
+        self.name = name
+        self.isswitch = isswitch
+        self.parameters = parameters
+        self.lines = lines
+        self.retname = retname
+
+
+class Module:
+    __slots__ = ['functions']
+
+    def __init__(self, functions):
+        self.functions = functions
 
 
 """class ArrayGen():
@@ -123,7 +150,7 @@ class Statements():
 
 
 def display(node, indent=0):
-    start = '  |' * indent + '->'
+    start = ' |' * indent + '->'
     indent += 1
 
     if isinstance(node, Fraction):
@@ -141,7 +168,33 @@ def display(node, indent=0):
     elif isinstance(node, Variable):
         print(start, node.name + '[]' * len(node.index),
               "(ismono)" if node.ismono else "")
+        for idx in node.index:
+            display(idx, indent)
+
+    elif isinstance(node, Parameter):
+        out = '@' if node.isborrowed else ''
+        out += '.'if node.ismono else ''
+        out += node.name
+        print(start, out)
 
     elif isinstance(node, Length):
         print(start, "Length")
         display(node.variable, indent)
+
+    elif isinstance(node, Let) or isinstance(node, Unlet):
+        print(start, type(node).__name__)
+        display(node.variable, indent)
+        display(node.rhs, indent)
+
+    elif isinstance(node, list):
+        for elt in node:
+            display(elt, indent-1)
+
+    elif isinstance(node, Function):
+        print(start, "func", node.name)
+        display(node.parameters, indent+1)
+        display(node.lines, indent+1)
+        print(start, "return", node.retname)
+
+    elif isinstance(node, Module):
+        display(node.functions, indent)
