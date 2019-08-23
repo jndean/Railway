@@ -1,76 +1,36 @@
-from fractions import Fraction
+from fractions import Fraction as BuiltinFraction
 
 
-def BINOP_ADD(a, b):
-    return a + b
-def BINOP_SUB(a, b):
-    return a - b
-def BINOP_MUL(a, b):
-    return a * b
-def BINOP_DIV(a, b):
-    return a / b
-def BINOP_POW(a, b):
-    return Fraction(a ** b)
-def BINOP_IDIV(a, b):
-    return Fraction(a // b)
-def BINOP_MOD(a, b):
-    return a % b
-def BINOP_XOR(a, b):
-    return Fraction(bool(a) ^ bool(b))
-def BINOP_OR(a, b):
-    return Fraction(bool(a) | bool(b))
-def BINOP_AND(a, b):
-    return Fraction(bool(a) & bool(b))
-def BINOP_LESS(a, b):
-    return Fraction(a < b)
-def BINOP_LEQ(a, b):
-    return Fraction(a <= b)
-def BINOP_GREAT(a, b):
-    return Fraction(a > b)
-def BINOP_GEQ(a, b):
-    return Fraction(a >= b)
-def BINOP_EQ(a, b):
-    return Fraction(a == b)
-def BINOP_NEQ(a, b):
-    return Fraction(a != b)
-def UNIOP_NOT(a):
-    return Fraction(not a)
-def UNIOP_SUB(a):
-    return -a
+binops = dict((k, None) for k in [
+    'ADD', 'SUB', 'MUL', 'DIV', 'POW', 'IDIV', 'MOD', 'XOR',
+    'OR', 'AND', 'LESS', 'LEQ', 'GREAT', 'GEQ', 'EQ', 'NEQ'])
+uniops = dict((k, None) for k in [
+    'NOT', 'SUB'])
+
+
+Fraction = BuiltinFraction
 
 
 class Binop:
-    __slots__ = ["lhs", "op", "rhs"]
+    __slots__ = ["lhs", "op", "rhs", "name"]
 
-    def __new__(cls, lhs, op_token, rhs):
-        # Optimise away constants
-        if isinstance(lhs, Fraction) and isinstance(rhs, Fraction):
-            op = globals()["BINOP_" + op_token]
-            return op(lhs, rhs)
-        return super().__new__(cls)
-
-    def __init__(self, lhs, op_token, rhs):
+    def __init__(self, lhs, op, rhs, name="UNNAMED"):
         self.lhs = lhs
-        self.op = globals()["BINOP_" + op_token]
+        self.op = op
         self.rhs = rhs
+        self.name = name
 
 
 class Uniop:
-    __slots__ = ["op", "expr"]
+    __slots__ = ["op", "expr", "name"]
 
-    def __new__(cls, op_token, expr):
-        # Optimise away constants
-        if isinstance(expr, Fraction):
-            op = globals()["UNIOP_" + op_token]
-            return op(expr)
-        return super().__new__(cls)
-
-    def __init__(self, op_token, expr):
-        self.op = globals()["UNIOP_" + op_token]
+    def __init__(self, op, expr, name="UNNAMED"):
+        self.op = op
         self.expr = expr
+        self.name = name
 
 
-class Variable:
+class Lookup:
     __slots__ = ["name", "index", "ismono"]
 
     def __init__(self, name, index, ismono):
@@ -89,35 +49,33 @@ class Parameter:
 
 
 class Length:
-    __slots__ = ["variable"]
+    __slots__ = ["lookup"]
 
-    def __init__(self, variable):
-        self.variable = variable
+    def __init__(self, lookup):
+        self.lookup = lookup
 
 
 class Let:
-    __slots__ = ["variable", "rhs"]
+    __slots__ = ["lookup", "rhs"]
 
-    def __init__(self, variable, rhs):
-        self.variable = variable
+    def __init__(self, lookup, rhs):
+        self.lookup = lookup
         self.rhs = rhs
 
 
 class Unlet:
-    __slots__ = ["variable", "rhs"]
+    __slots__ = ["lookup", "rhs"]
 
-    def __init__(self, variable, rhs):
-        self.variable = variable
+    def __init__(self, lookup, rhs):
+        self.lookup = lookup
         self.rhs = rhs
 
 
-class Statements:
-    __slots__ = ["items", "isswitch"]
+class Print:
+    __slots__ = ["target"]
 
-    def __init__(self, items):
-        self.items = items
-        self.isswitch = any(hasattr(x, "isswitch") and x.isswitch
-                            for x in items)
+    def __init__(self, target):
+        self.target = target
 
 
 class Function:
@@ -132,10 +90,11 @@ class Function:
 
 
 class Module:
-    __slots__ = ['functions']
+    __slots__ = ['functions', 'name']
 
-    def __init__(self, functions):
+    def __init__(self, functions, name='Unnamed'):
         self.functions = functions
+        self.name = name
 
 
 """class ArrayGen():
@@ -153,19 +112,19 @@ def display(node, indent=0):
     start = ' |' * indent + '->'
     indent += 1
 
-    if isinstance(node, Fraction):
+    if isinstance(node, BuiltinFraction):
         print(start, str(node))
 
     elif isinstance(node, Binop):
-        print(start, node.op.__name__)
+        print(start, node.name)
         display(node.lhs, indent)
         display(node.rhs, indent)
 
     elif isinstance(node, Uniop):
-        print(start, node.op.__name__)
+        print(start, node.name)
         display(node.expr, indent)
 
-    elif isinstance(node, Variable):
+    elif isinstance(node, Lookup):
         print(start, node.name + '[]' * len(node.index),
               "(ismono)" if node.ismono else "")
         for idx in node.index:
@@ -179,15 +138,19 @@ def display(node, indent=0):
 
     elif isinstance(node, Length):
         print(start, "Length")
-        display(node.variable, indent)
+        display(node.lookup, indent)
 
     elif isinstance(node, Let) or isinstance(node, Unlet):
         print(start, type(node).__name__)
-        display(node.variable, indent)
+        display(node.lookup, indent)
         display(node.rhs, indent)
 
     elif isinstance(node, list):
         for elt in node:
+            display(elt, indent-1)
+
+    elif isinstance(node, dict):
+        for elt in node.values():
             display(elt, indent-1)
 
     elif isinstance(node, Function):
