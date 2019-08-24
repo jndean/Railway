@@ -108,6 +108,14 @@ def generate_parser(tree):
     def print_expression(p):
         return tree.Print(p[1])
 
+    # -------------------- print -------------------- #
+
+    @pgen.production('if : IF LPAREN expression RPAREN NEWLINE statements'
+                     '     FI LPAREN RPAREN')
+    @pgen.production('print : PRINT string')
+    def print_expression(p):
+        return tree.Print(p[1])
+
     # -------------------- let unlet -------------------- #
 
     # #@pgen.production('let : LET lookup EQ arraygen')
