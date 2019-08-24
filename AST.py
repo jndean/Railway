@@ -71,6 +71,16 @@ class Unlet:
         self.rhs = rhs
 
 
+class If:
+    __slots__ = ["enter_expr", "lines", "else_lines", "exit_expr"]
+
+    def __init__(self, enter_expr, lines, else_lines, exit_expr):
+        self.enter_expr = enter_expr
+        self.lines = lines
+        self.else_lines = else_lines
+        self.exit_expr = exit_expr
+
+
 class Print:
     __slots__ = ["target"]
 

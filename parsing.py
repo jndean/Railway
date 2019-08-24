@@ -1,6 +1,6 @@
 import sys
 
-from rply import ParserGenerator
+from rply import ParserGenerator, Token
 
 import AST
 import interpreting
@@ -96,6 +96,7 @@ def generate_parser(tree):
 
     @pgen.production('stmt : let')
     @pgen.production('stmt : unlet')
+    @pgen.production('stmt : if')
     @pgen.production('stmt : print')
     @pgen.production('statement : stmt NEWLINE')
     def statement(p):
@@ -108,13 +109,34 @@ def generate_parser(tree):
     def print_expression(p):
         return tree.Print(p[1])
 
-    # -------------------- print -------------------- #
+    # -------------------- if -------------------- #
 
-    @pgen.production('if : IF LPAREN expression RPAREN NEWLINE statements'
+    @pgen.production('if : IF LPAREN expression RPAREN NEWLINE'
+                     '     statements'
+                     '     FI LPAREN expression RPAREN')
+    @pgen.production('if : IF LPAREN expression RPAREN NEWLINE'
+                     '     statements'
                      '     FI LPAREN RPAREN')
-    @pgen.production('print : PRINT string')
-    def print_expression(p):
-        return tree.Print(p[1])
+    @pgen.production('if : IF LPAREN expression RPAREN NEWLINE'
+                     '     statements'
+                     '     ELSE NEWLINE statements'
+                     '     FI LPAREN expression RPAREN')
+    @pgen.production('if : IF LPAREN expression RPAREN NEWLINE'
+                     '     statements'
+                     '     ELSE NEWLINE statements'
+                     '     FI LPAREN RPAREN')
+    def _if(p):
+        _, _, enter_expr, _, _, lines = p[:6]
+        p = p[6:]
+        if p.pop(0).gettokentype() == 'ELSE':
+            else_lines = p[1]
+            p = p[4:]
+        else:
+            else_lines = []
+            p.pop(0)  # LPAREN
+        t = p.pop(0)  # expression or RPAREN
+        exit_expr = enter_expr if isinstance(t, Token) else t
+        return tree.If(enter_expr, lines, else_lines, exit_expr)
 
     # -------------------- let unlet -------------------- #
 

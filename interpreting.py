@@ -7,8 +7,8 @@ import AST
 # -------------------- Exceptions ----------------------  #
 
 class RailwayException(RuntimeError):
-    def __init__(self, message, scope=None):
-        super().__init__(self, message)
+    def __init__(self, message, scope):
+        self.message = message
         self.stack = []
         while scope is not None:
             self.stack.append(scope.name)
@@ -21,6 +21,7 @@ class RailwayVariableExists(RailwayException): pass
 class RailwayIndexError(RailwayException): pass
 class RailwayTypeError(RailwayException): pass
 class RailwayUndefinedFunction(RailwayException): pass
+class RailwayFailedAssertion(RailwayException): pass
 
 
 # -------------------- Interpreter-Only Objects ---------------------- #
@@ -43,8 +44,8 @@ class Scope:
         if globals and name in self.globals:
             return self.globals[name]
         raise RailwayUndefinedVariable(
-              f'Variable {name} is undefined',
-              scope=self)
+            f'Variable {name} is undefined',
+            scope=self)
 
     def assign(self, name, var):
         namespace = self.monos if var.ismono else self.locals
@@ -79,12 +80,19 @@ class Variable:
 
 class Module(AST.Module):
     def eval(self):
-        scope = Scope(parent=None, name='main', locals={}, monos={}, globals={})
+        scope = Scope(parent=None, name='main',
+                      locals={}, monos={}, globals={})
         if 'main' not in self.functions and '~main' not in self.functions:
             raise RailwayUndefinedFunction(
                 f'There is no main function in {self.name}')
         main = self.functions.get('main', self.functions.get('~main', None))
-        main.eval(scope, backwards=False)
+        try:
+            main.eval(scope, backwards=False)
+        except RailwayException as e:
+            print("\nError Call Stack:")
+            for frame in e.stack:
+                print('->', frame)
+            print(type(e).__name__, ':', e.message)
 
 
 class Function(AST.Function):
@@ -134,11 +142,28 @@ class Print(AST.Print):
             print(self.stringify(memory))
 
     def stringify(self, memory):
-        # Temporary implementation 
+        # Temporary implementation
         s = ', '.join(str(elt) for elt in memory)
         if isinstance(memory, list):
             s = '[' + s + ']'
         return s
+
+
+# -------------------- AST - Let and Unlet --------------------#
+
+class If(AST.If):
+    def eval(self, scope, backwards):
+        enter_expr = self.exit_expr if backwards else self.enter_expr
+        exit_expr = self.enter_expr if backwards else self.exit_expr
+        enter_result = bool(enter_expr.eval(scope))
+        lines = self.lines if enter_result else self.else_lines
+        for line in reversed(lines) if backwards else lines:
+            line.eval(scope, backwards)
+        exit_result = bool(exit_expr.eval(scope))
+        if exit_result != enter_result:
+            raise RailwayFailedAssertion(
+                'Failed exit assertion in if-fi statement',
+                scope=scope)
 
 
 # -------------------- AST - Let and Unlet --------------------#
@@ -187,19 +212,19 @@ def unlet_eval(self, scope):
     var = scope.lookup(name=lhs.name, globals=False)
     if var.isarray != bool(lhs.index):
         raise RailwayTypeError(
-            f'Variable {lhs.name} is {"" if var.isarray else "not"} an array '
-            f'but Unlet has {"no" if var.isarray else""} indices',
+            f'Variable "{lhs.name}" is {"" if var.isarray else "not"} an '
+            f'array but Unlet has {"no" if var.isarray else""} indices',
             scope=scope)
     try:
         compare_memory(
             var.memory if var.isarray else var.memory[0],
             rhs.eval(scope=scope) if rhs is not None else Fraction(0))
     except IndexError:
-        raise RailwayIndexError(f'Unletting variable {lhs.name} '
+        raise RailwayIndexError(f'Unletting variable "{lhs.name}" '
                                 'using expression of incorrect shape',
                                 scope=scope)
     except ValueError:
-        raise RailwayIndexError(f'Value mismath during Unlet of {lhs.name}',
+        raise RailwayIndexError(f'Value mismath during Unlet of "{lhs.name}"',
                                 scope=scope)
     scope.remove(lhs.name)
 
