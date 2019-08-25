@@ -97,6 +97,8 @@ def generate_parser(tree):
     @pgen.production('stmt : let')
     @pgen.production('stmt : unlet')
     @pgen.production('stmt : if')
+    @pgen.production('stmt : loop')
+    @pgen.production('stmt : modification')
     @pgen.production('stmt : print')
     @pgen.production('statement : stmt NEWLINE')
     def statement(p):
@@ -108,6 +110,30 @@ def generate_parser(tree):
     @pgen.production('print : PRINT string')
     def print_expression(p):
         return tree.Print(p[1])
+
+    # -------------------- modification -------------------- #
+
+    @pgen.production('modification : lookup MODADD expression')
+    @pgen.production('modification : lookup MODSUB expression')
+    @pgen.production('modification : lookup MODMUL expression')
+    @pgen.production('modification : lookup MODDIV expression')
+    def modification(p):
+        lookup, op_token, expr = p
+        op_name = op_token.gettokentype()
+        op = tree.modops[op_name]
+        inv_op = tree.inv_modops[op_name]
+        return tree.Modop(lookup, op, inv_op, expr, op_name)
+
+    # -------------------- loop -------------------- #
+
+    @pgen.production('loop : LOOP LPAREN expression RPAREN NEWLINE'
+                     '         statements'
+                     '       POOL LPAREN expression RPAREN')
+    def loop(p):
+        forward_condition = p[2]
+        lines = p[5]
+        backward_condition = p[8]
+        return tree.Loop(forward_condition, lines, backward_condition)
 
     # -------------------- if -------------------- #
 
@@ -183,7 +209,7 @@ def generate_parser(tree):
         binop = tree.binops[name]
         # Compile-time constant computation #
         if isinstance(lhs, tree.Fraction) and isinstance(rhs, tree.Fraction):
-            return binop(lhs, rhs)
+            return tree.Fraction(binop(lhs, rhs))
         return tree.Binop(lhs, binop, rhs, name)
 
     @pgen.production('expression : LPAREN expression RPAREN')
@@ -206,7 +232,7 @@ def generate_parser(tree):
         uniop = tree.uniops[name]
         # Compile-time constant computation #
         if isinstance(arg, tree.Fraction):
-            return uniop(arg)
+            return tree.Fraction(uniop(arg))
         return tree.Uniop(uniop, arg, name)
 
     # -------------------- lookup -------------------- #

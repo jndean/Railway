@@ -4,7 +4,7 @@
 (setq railway-font-lock-keywords
       (let* (
 	     (x-keywords '("if" "else" "fi" "do" "yield" "undo" "loop"
-			   "while" "for" "rof" "try" "catch" "yrt" "in"))
+			   "pool" "for" "rof" "try" "catch" "yrt" "in"))
             (x-types '("let" "unlet"))
             (x-constants '("main"))
             (x-events '("func" "return"))

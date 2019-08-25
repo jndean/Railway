@@ -6,6 +6,8 @@ binops = dict((k, None) for k in [
     'OR', 'AND', 'LESS', 'LEQ', 'GREAT', 'GEQ', 'EQ', 'NEQ'])
 uniops = dict((k, None) for k in [
     'NOT', 'SUB'])
+modops = dict((k, None) for k in [
+    'MODADD', 'MODSUB', 'MODMUL', 'MODDIV'])
 
 
 Fraction = BuiltinFraction
@@ -71,6 +73,17 @@ class Unlet:
         self.rhs = rhs
 
 
+class Modop:
+    __slots__ = ["lookup", "op", "inv_op", "expr", "name"]
+
+    def __init__(self, lookup, op, inv_op, expr, name="UNNAMED"):
+        self.lookup = lookup
+        self.op = op
+        self.inv_op = inv_op
+        self.expr = expr
+        self.name = name
+
+
 class If:
     __slots__ = ["enter_expr", "lines", "else_lines", "exit_expr"]
 
@@ -79,6 +92,15 @@ class If:
         self.lines = lines
         self.else_lines = else_lines
         self.exit_expr = exit_expr
+
+
+class Loop:
+    __slots__ = ["forward_condition", "lines", "backward_condition"]
+
+    def __init__(self, forward_condition, lines, backward_condition):
+        self.forward_condition = forward_condition
+        self.lines = lines
+        self.backward_condition = backward_condition
 
 
 class Print:
@@ -147,7 +169,7 @@ def display(node, indent=0):
         print(start, out)
 
     elif isinstance(node, Length):
-        print(start, "Length")
+        print(start, "LENGTH")
         display(node.lookup, indent)
 
     elif isinstance(node, Let) or isinstance(node, Unlet):
@@ -163,11 +185,42 @@ def display(node, indent=0):
         for elt in node.values():
             display(elt, indent-1)
 
+    elif isinstance(node, Print):
+        print(start, 'PRINT')
+        display(node.target, indent)
+
+    elif isinstance(node, If):
+        print(start, 'IF')
+        display(node.enter_expr, indent)
+        print(start, 'THEN')
+        display(node.lines, indent)
+        if node.else_lines:
+            print(start, 'ELSE')
+            display(node.else_lines, indent)
+        print(start, 'FI')
+        display(node.exit_expr, indent)
+
+    elif isinstance(node, Modop):
+        print(start, node.name)
+        display(node.lookup, indent)
+        display(node.expr, indent)
+
+    elif isinstance(node, Loop):
+        print(start, 'LOOP')
+        display(node.forward_condition, indent)
+        print(start, 'LOOP_BODY')
+        display(node.lines, indent)
+        print(start, 'WHILE')
+        display(node.backward_condition, indent)
+
     elif isinstance(node, Function):
-        print(start, "func", node.name)
+        print(start, "FUNC", node.name)
         display(node.parameters, indent+1)
         display(node.lines, indent+1)
-        print(start, "return", node.retname)
+        print(start, "RETURN", node.retname)
 
     elif isinstance(node, Module):
         display(node.functions, indent)
+
+    else:
+        print("UNRECOGNISED NODE TYPE:", type(node))

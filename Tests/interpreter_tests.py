@@ -41,12 +41,15 @@ class ExpressionNodes(unittest.TestCase):
                 'global_x': I.Fraction(7, 8)}
         s.assign('x', I.Variable(memory=[vals['x']]))
         s.assign('array', I.Variable(memory=[vals['array']]*10, isarray=True))
+        s.assign('array2d', I.Variable(memory=[[vals['array']]*10,
+                                               [vals['x']]],
+                                       isarray=True))
         s.assign('.x', I.Variable(memory=[vals['mono_x']], ismono=True))
         s.globals = {'global_x': I.Variable(memory=[vals['global_x']])}
         self.s = s
         self.vals = vals
 
-    def test_Lookup(self):
+    def test_Lookup_eval(self):
         v = I.Lookup('x', index=tuple(), ismono=False)
         result = v.eval(scope=self.s)
         self.assertIsInstance(result, I.Fraction)
@@ -87,6 +90,37 @@ class ExpressionNodes(unittest.TestCase):
         with self.assertRaises(I.RailwayIndexError):
             v = I.Lookup('x', index=(I.Fraction(1),), ismono=False)
             v.eval(scope=self.s)
+
+    def test_Lookup_set(self):
+        v = I.Lookup('x', index=tuple(), ismono=False)
+        val = I.Fraction(99)
+        v.set(scope=self.s, value=val)
+        result = v.eval(scope=self.s)
+        self.assertIs(val, result)
+
+        v = I.Lookup('array2d', index=(I.Fraction(1),), ismono=False)
+        with self.assertRaises(I.RailwayTypeError):
+            v.set(scope=self.s, value=val)
+
+        v = I.Lookup('array2d',
+                     index=(I.Fraction(1), I.Fraction(1)),
+                     ismono=False)
+        with self.assertRaises(I.RailwayIndexError):
+            v.set(scope=self.s, value=val)
+
+        v = I.Lookup('array2d',
+                     index=(I.Fraction(1), I.Fraction(0), I.Fraction(0)),
+                     ismono=False)
+        with self.assertRaises(I.RailwayIndexError):
+            v.set(scope=self.s, value=val)
+
+        v = I.Lookup('array2d',
+                     index=(I.Fraction(1), I.Fraction(0)),
+                     ismono=False)
+        val = I.Fraction(0.111)
+        v.set(scope=self.s, value=val)
+        result = v.eval(scope=self.s)
+        self.assertIs(result, val)
 
     def test_Binop(self):
         lhs = I.Lookup('x', index=tuple(), ismono=False)

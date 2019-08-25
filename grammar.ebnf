@@ -32,7 +32,7 @@ if_stmt = "if" "(" expression ")" "\n"
 
 loop_stmt = "loop" "(" expression ")" "\n"
             {statement}
-	    "while" "(" expression ")" ;
+	    "pool" "(" expression ")" ;
 
 for_stmt = "for" "(" var_name "=" expression ")" "\n"
             {statement}

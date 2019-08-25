@@ -76,6 +76,20 @@ class Variable:
         self.isarray = isarray
 
 
+class VariableMutator:
+    __slots__ = ['memory', 'index']
+
+    def __init__(self, memory, index):
+        self.memory = memory
+        self.index = index
+
+    def get(self):
+        return self.memory[self.index]
+
+    def set(self, value):
+        self.memory[self.index] = value
+
+
 # -------------------- AST - Top Level Objects --------------------#
 
 class Module(AST.Module):
@@ -131,25 +145,46 @@ class Function(AST.Function):
 
 class Print(AST.Print):
     def eval(self, scope, backwards=False):
-        if backwards:
-            return
+        # if backwards:
+        #     return
         if isinstance(self.target, str):
             print(self.target)
         else:
             memory = self.target.eval(scope)
-            if isinstance(memory, Fraction):
-                memory = [memory]
             print(self.stringify(memory))
 
     def stringify(self, memory):
         # Temporary implementation
-        s = ', '.join(str(elt) for elt in memory)
-        if isinstance(memory, list):
-            s = '[' + s + ']'
-        return s
+        if isinstance(memory, Fraction):
+            return str(memory)
+        return '[' + ', '.join(self.stringify(elt) for elt in memory) + ']'
 
 
-# -------------------- AST - Let and Unlet --------------------#
+# -------------------- AST - Loop, If --------------------#
+
+class Loop(AST.Loop):
+    def eval(self, scope, backwards):
+        if backwards:
+            condition = self.backward_condition
+            assertion = self.forward_condition
+            lines = reversed(self.lines)
+        else:
+            condition = self.forward_condition
+            assertion = self.backward_condition
+            lines = self.lines
+        if assertion.eval(scope):
+            raise RailwayFailedAssertion(
+                'Loop reverse condition is true before loop start',
+                scope=scope)
+        while condition.eval(scope):
+            for line in lines:
+                line.eval(scope, backwards)
+            if not assertion.eval(scope):
+                raise RailwayFailedAssertion(
+                    'Foward loop condition holds when'
+                    ' reverse condition does not',
+                    scope=scope)
+
 
 class If(AST.If):
     def eval(self, scope, backwards):
@@ -164,6 +199,18 @@ class If(AST.If):
             raise RailwayFailedAssertion(
                 'Failed exit assertion in if-fi statement',
                 scope=scope)
+
+
+# -------------------- AST - Modifications --------------------#
+
+class Modop(AST.Modop):
+    def eval(self, scope, backwards):
+        op = self.inv_op if backwards else self.op
+        lhs, rhs = self.lookup.eval(scope), self.expr.eval(scope)
+        result = Fraction(op(lhs, rhs))
+        self.lookup.set(scope, result)
+        # The seperate lookup.eval and lookup.set calls are
+        # an opportunity for optimisation
 
 
 # -------------------- AST - Let and Unlet --------------------#
@@ -224,7 +271,7 @@ def unlet_eval(self, scope):
                                 'using expression of incorrect shape',
                                 scope=scope)
     except ValueError:
-        raise RailwayIndexError(f'Value mismath during Unlet of "{lhs.name}"',
+        raise RailwayIndexError(f'Value mismatch during Unlet of "{lhs.name}"',
                                 scope=scope)
     scope.remove(lhs.name)
 
@@ -302,8 +349,35 @@ class Lookup(AST.Lookup):
                     f'Indexing into {self.name} which is a number',
                     scope=scope)
             output = var.memory[0]
-
         return output
+
+    def set(self, scope, value):
+        var = scope.lookup(self.name)
+        memory = var.memory
+        if var.isarray:
+            indices = [int(idx.eval(scope=scope)) for idx in self.index]
+            lookup_str = f'{self.name}[{",".join(str(i) for i in indices)}]'
+            try:
+                for idx in indices[:-1]:
+                    memory = memory[idx]
+                index = indices[-1]
+                if not isinstance(memory[index], Fraction):
+                    raise RailwayTypeError(
+                        f'Trying to modify array "{lookup_str}" with a number',
+                        scope=scope)
+            except (IndexError, TypeError) as e:
+                if isinstance(memory, Fraction) or isinstance(e, TypeError):
+                    msg = 'Indexing into number during lookup '
+                else:
+                    msg = 'Out of bounds error accessing '
+                raise RailwayIndexError(msg + lookup_str, scope=scope)
+        else:  # Non-array (so a number (so a special array of length 1))
+            if self.index:
+                raise RailwayIndexError(
+                    f'Indexing into {self.name} which is a number',
+                    scope=scope)
+            index = 0
+        memory[index] = value
 
 
 class Fraction(BuiltinFraction):
@@ -334,3 +408,13 @@ binops = {'ADD': lambda a, b: a + b,
 
 uniops = {'NOT': lambda x: not bool(x),
           'SUB': lambda x: -x}
+
+modops = {'MODADD': lambda a, b: a + b,
+          'MODSUB': lambda a, b: a - b,
+          'MODMUL': lambda a, b: a * b,
+          'MODDIV': lambda a, b: a / b}
+
+inv_modops = {'MODADD': modops['MODSUB'],
+              'MODSUB': modops['MODADD'],
+              'MODMUL': modops['MODDIV'],
+              'MODDIV': modops['MODMUL']}

@@ -5,15 +5,15 @@ __all__ = ["lexer", "all_tokens"]
 
 all_tokens = [
     "IMPORT", "AS", "GLOBAL", "FILE", "LET", "UNLET", 'FUNC',
-    'RETURN', 'PRINT', 'IF', 'FI', 'ELSE', 'LOOP', 'WHILE',
+    'RETURN', 'PRINT', 'IF', 'FI', 'ELSE', 'LOOP', 'POOL',
     'FOR', 'ROF', 'CALL', 'UNCALL', 'DO', 'UNDO', 'YIELD',
-    'SWAP', 'PUSH', 'POP', 'TRY', 'CATCH', 'IN', "LEQ", "GEQ",
+    'SWAP', 'PUSH', 'POP', 'TRY', 'CATCH', 'YRT', 'IN', "LEQ", "GEQ",
     "NEQ", "EQ", "LESS", "GREAT", "LRARROW", "RARROW",
     "MODADD", "MODSUB", "MODMUL", "MODDIV", "ADD", "SUB",
     "IDIV", "DIV", "MUL", "POW", "MOD", "XOR", "OR", "AND",
     "LPAREN", "RPAREN", "LSQUARE", "RSQUARE", "LBRACK",
     "RBRACK", "COMMA", "MONO", "LEN", "NOT", "SWITCH", "NUMBER",
-    "NAME", "STRING", "COMMENT", "NEWLINE", "ASSIGN", "BORROWED"]
+    "NAME", "STRING", "NEWLINE", "ASSIGN", "BORROWED"]
 
 lg = LexerGenerator()
 
@@ -30,7 +30,7 @@ lg.add('IF', r"if")
 lg.add('FI', r"fi")
 lg.add('ELSE', r"else")
 lg.add('LOOP', r"loop")
-lg.add('WHILE', r"while")
+lg.add('POOL', r"pool")
 lg.add('FOR', r"for")
 lg.add('ROF', r"rof")
 lg.add('CALL', r"call")
@@ -43,6 +43,7 @@ lg.add('PUSH', r"push")
 lg.add('POP', r"pop")
 lg.add('TRY', r"try")
 lg.add('CATCH', r"catch")
+lg.add('YRT', r"yrt")
 lg.add('IN', r"in")
 
 lg.add("LEQ", r"\<\=")
@@ -90,13 +91,15 @@ lg.add("SWITCH", r"~")
 lg.add("NUMBER", r"\d+(\/\d+)?")
 lg.add("NAME", r"[a-zA-Z][a-zA-Z0-9_.]*")
 lg.add("STRING", r"\"[^\"]*\"")
-lg.add("COMMENT", r"%[^%]*%")
+# lg.add("COMMENT", r"%[^%]*%")
 lg.add("NEWLINE", r"\n+")
 
-# Escape newlines
+# Escaped newlines
 lg.ignore(r"\\[ \t\r\f\v]*\n")
 # Whitespace
 lg.ignore(r"[ \t\r\f\v]+")
+# Comments
+lg.ignore(r"\$[^\n]*\n")
 
 lexer = lg.build()
 
