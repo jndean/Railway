@@ -2,28 +2,28 @@
 module = {import} {global} {file} {func_decl} ;
 
 import = "import" string ["as" [name]] ;
-global = "global" variable "=" expression ;
+global = "global" lookup "=" expression ;
 file = "file" name "=" string ;
 
 func_decl = "func" func_name "(" [parameter]  {","  parameter} ")" "\n"
             {statement}
-            "return" [variable] "\n" ;
+            "return" [lookup] "\n" ;
 
 statement = [let_stmt | unlet_stmt | if_stmt | loop_stmt | for_stmt |
              push_stmt | pop_stmt | swap_stmt | do_stmt | mod_stmt |
 	     try_stmt | catch_stmt | call_stmt | print_stmt] "\n" ;
 
-let_stmt = "let" variable "=" (expression | array_generator | func_call) ;
+let_stmt = "let" lookup "=" (expression | array_generator | func_call) ;
 
-unlet_stmt = "unlet" variable "=" (expression | array_generator | func_call) ;
+unlet_stmt = "unlet" lookup "=" (expression | array_generator | func_call) ;
 
-push_stmt = "push" (variable "=>" variable) |
-	    	   (variable "<=" variable) ;
+push_stmt = "push" (lookup "=>" lookup) |
+	    	   (lookup "<=" lookup) ;
 
-pop_stmt = "pop" (variable "<=" variable) |
-    	   (variable "=>" variable) ;
+pop_stmt = "pop" (lookup "<=" lookup) |
+    	   (lookup "=>" lookup) ;
 
-swap_stmt = "swap" variable "<=>" variable ;
+swap_stmt = "swap" lookup "<=>" lookup ;
 
 if_stmt = "if" "(" expression ")" "\n"
           {statement}
@@ -46,18 +46,18 @@ do_stmt = "do" "\n"
 
 yieldable_statement = [let_stmt | unlet_stmt | print_stmt] "\n" ;
 
-try_stmt = "try" "(" name "in" variable | array_generator ")" "\n"
+try_stmt = "try" "(" name "in" lookup | array_generator ")" "\n"
            {statement}
 	   "yrt" ;
 
 catch_stmt = "catch" "(" expression ")" ;
 
-mod_stmt = variable "+=" expression
-         | variable "-=" expression
-         | variable "*=" expression
-         | variable "/=" expression ;
+mod_stmt = lookup "+=" expression
+         | lookup "-=" expression
+         | lookup "*=" expression
+         | lookup "/=" expression ;
 
-print_stmt = "print" "(" variable {"," variable} ")" ;
+print_stmt = "print" "(" lookup {"," lookup} ")" ;
 
 array_generator = "[" expression "for" name "in" array_generator "]"
                   | "[" expression "to" expression [ "by" expression ] "]" ;
@@ -66,10 +66,10 @@ func_call = func_name ["{" expression "}"] "(" [parameter] {',' parameter} ")" ;
 
 parameter = ["@"] var_name ;
 
-variable = var_name {"[" expression "]"} ;
+lookup = var_name {"[" expression "]"} ;
 
 expression = number
-           | ['#'] variable
+           | ['#'] lookup
 	   | unary_op expression
 	   | expression binary_op expression
 	   | '(' expression ')' ;
