@@ -225,6 +225,7 @@ def generate_parser(tree):
     @pgen.production('expression : expression MUL expression')
     @pgen.production('expression : expression DIV expression')
     @pgen.production('expression : expression IDIV expression')
+    @pgen.production('expression : expression MOD expression')
     @pgen.production('expression : expression POW expression')
     @pgen.production('expression : expression XOR expression')
     @pgen.production('expression : expression OR expression')
