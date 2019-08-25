@@ -7,20 +7,24 @@ import interpreting
 from lexing import lexer, all_tokens
 
 
-class RailwaySyntaxError(RuntimeError):
-    def __init__(self, message):
-        self.message = message
+# -------------------------- Exceptions -------------------------- #
+
+class RailwaySyntaxError(RuntimeError): pass
+class RailwayIllegalMono(RailwaySyntaxError):  pass
+class RailwaySelfmodification(RailwaySyntaxError):  pass
 
 
-class RailwayIllegalMono(RailwaySyntaxError):
-    pass
-
-
-# ---------------- Conditions for searching the tree ---------------- #
+# -------------- Conditions for searching the tree -------------- #
 
 def search_mono_lookups(x):
     return isinstance(x, AST.Lookup) and x.ismono
 
+
+def search_lookup_name(name):
+    return lambda x: isinstance(x, AST.Lookup) and x.name == name
+
+
+# ------------------- main parser generation method ------------------- #
 
 # tree can be either the AST module or the interpreter module, creating
 # a pure syntax tree or an interpreter tree (with eval methods) respectively
@@ -137,6 +141,13 @@ def generate_parser(tree):
         op_name = op_token.gettokentype()
         op = tree.modops[op_name]
         inv_op = tree.inv_modops[op_name]
+        if not lookup.ismono and expr.search(search_mono_lookups):
+            raise RailwayIllegalMono(
+                f'Modifying non-mono variable "{lookup.name}" '
+                'using mono expression')
+        if expr.search(search_lookup_name(lookup.name)):
+            raise RailwaySelfmodification(
+                f'Statement uses "{lookup.name}" to modify itself')
         return tree.Modop(lookup, op, inv_op, expr, op_name)
 
     # -------------------- loop -------------------- #
