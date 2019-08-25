@@ -7,6 +7,21 @@ import interpreting
 from lexing import lexer, all_tokens
 
 
+class RailwaySyntaxError(RuntimeError):
+    def __init__(self, message):
+        self.message = message
+
+
+class RailwayIllegalMono(RailwaySyntaxError):
+    pass
+
+
+# ---------------- Conditions for searching the tree ---------------- #
+
+def search_mono_lookups(x):
+    return isinstance(x, AST.Lookup) and x.ismono
+
+
 # tree can be either the AST module or the interpreter module, creating
 # a pure syntax tree or an interpreter tree (with eval methods) respectively
 def generate_parser(tree):
@@ -172,6 +187,9 @@ def generate_parser(tree):
     def let(p):
         rhs = tree.Fraction(0) if len(p) == 2 else p[3]
         lookup = p[1]
+        if not lookup.ismono and rhs.search(search_mono_lookups):
+            raise RailwayIllegalMono(f'Initialising "{lookup.name}" '
+                                     'using mono expression')
         return tree.Let(lookup, rhs)
 
     # @pgen.production('unlet : UNLET lookup EQ arraygen')
@@ -180,6 +198,9 @@ def generate_parser(tree):
     def unlet(p):
         rhs = tree.Fraction(0) if len(p) == 2 else p[3]
         lookup = p[1]
+        if not lookup.ismono and rhs.search(search_mono_lookups):
+            raise RailwayIllegalMono(f'Unletting "{lookup.name}" '
+                                     'using mono expression')
         return tree.Unlet(lookup, rhs)
 
     # -------------------- expression -------------------- #

@@ -1,4 +1,3 @@
-from fractions import Fraction as BuiltinFraction
 from itertools import chain
 
 import AST
@@ -128,7 +127,7 @@ class Function(AST.Function):
                 raise RailwayLeakedInformation(
                         f'Variable "{leaked.pop()}" is still in scope of '
                         f'function {self.name} at the end of an uncall',
-                        scope=self)
+                        scope=scope)
             return_names = [p.name for p in self.parameters if not p.isborrowed]
         else:
             for name, var in chain(scope.locals.items(), scope.monos.items()):
@@ -136,7 +135,7 @@ class Function(AST.Function):
                     RailwayLeakedInformation(
                         f'Variable "{name}" is still in scope of function '
                         f'{self.name} at the end of a call',
-                        scope=self)
+                        scope=scope)
             return_names = [] if self.retname is None else [self.retname]
             return [scope.lookup(nm, globals=False) for nm in return_names]
 
@@ -380,7 +379,7 @@ class Lookup(AST.Lookup):
         memory[index] = value
 
 
-class Fraction(BuiltinFraction):
+class Fraction(AST.Fraction):
     def eval(self, scope=None):
         return self
 

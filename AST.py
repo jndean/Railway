@@ -10,7 +10,9 @@ modops = dict((k, None) for k in [
     'MODADD', 'MODSUB', 'MODMUL', 'MODDIV'])
 
 
-Fraction = BuiltinFraction
+class Fraction(BuiltinFraction):
+    def search(self, condition):
+        return condition(self)
 
 
 class Binop:
@@ -22,6 +24,11 @@ class Binop:
         self.rhs = rhs
         self.name = name
 
+    def search(self, condition):
+        return (condition(self)
+                or self.lhs.search(condition)
+                or self.rhs.search(condition))
+
 
 class Uniop:
     __slots__ = ["op", "expr", "name"]
@@ -30,6 +37,9 @@ class Uniop:
         self.op = op
         self.expr = expr
         self.name = name
+
+    def search(self, condition):
+        return condition(self) or self.expr.search(condition)
 
 
 class Lookup:
@@ -40,6 +50,10 @@ class Lookup:
         self.index = index
         self.ismono = ismono
 
+    def search(self, condition):
+        return (condition(self)
+                or any(x.search(condition) for x in self.index))
+
 
 class Parameter:
     __slots__ = ["name", "isborrowed", "ismono"]
@@ -49,12 +63,18 @@ class Parameter:
         self.isborrowed = isborrowed
         self.ismono = ismono
 
+    def search(self, condition):
+        return condition(self)
+
 
 class Length:
     __slots__ = ["lookup"]
 
     def __init__(self, lookup):
         self.lookup = lookup
+
+    def search(self, condition):
+        return condition(self) or self.lookup.search(condition)
 
 
 class Let:
@@ -64,6 +84,11 @@ class Let:
         self.lookup = lookup
         self.rhs = rhs
 
+    def search(self, condition):
+        return (condition(self)
+                or self.lookup.search(condition)
+                or self.rhs.search(condition))
+
 
 class Unlet:
     __slots__ = ["lookup", "rhs"]
@@ -71,6 +96,11 @@ class Unlet:
     def __init__(self, lookup, rhs):
         self.lookup = lookup
         self.rhs = rhs
+
+    def search(self, condition):
+        return (condition(self)
+                or self.lookup.search(condition)
+                or self.rhs.search(condition))
 
 
 class Modop:
@@ -83,6 +113,11 @@ class Modop:
         self.expr = expr
         self.name = name
 
+    def search(self, condition):
+        return (condition(self)
+                or self.lookup.search(condition)
+                or self.expr.search(condition))
+
 
 class If:
     __slots__ = ["enter_expr", "lines", "else_lines", "exit_expr"]
@@ -93,6 +128,13 @@ class If:
         self.else_lines = else_lines
         self.exit_expr = exit_expr
 
+    def search(self, condition):
+        return (condition(self)
+                or self.enter_expr.search(condition)
+                or self.exit_expr.search(condition)
+                or any(x.search(condition) for x in self.lines)
+                or any(x.search(condition) for x in self.else_lines))
+
 
 class Loop:
     __slots__ = ["forward_condition", "lines", "backward_condition"]
@@ -102,12 +144,21 @@ class Loop:
         self.lines = lines
         self.backward_condition = backward_condition
 
+    def search(self, condition):
+        return (condition(self)
+                or self.forward_condition.search(condition)
+                or self.backward_condition.search(condition)
+                or any(x.search(condition) for x in self.lines))
+
 
 class Print:
     __slots__ = ["target"]
 
     def __init__(self, target):
         self.target = target
+
+    def search(self, condition):
+        return condition(self)
 
 
 class Function:
@@ -120,6 +171,11 @@ class Function:
         self.lines = lines
         self.retname = retname
 
+    def search(self, condition):
+        return (condition(self)
+                or any(x.search(condition) for x in self.parameters)
+                or any(x.search(condition) for x in self.lines))
+
 
 class Module:
     __slots__ = ['functions', 'name']
@@ -127,6 +183,10 @@ class Module:
     def __init__(self, functions, name='Unnamed'):
         self.functions = functions
         self.name = name
+
+    def search(self, condition):
+        return (condition(self)
+                or any(x.search(condition) for x in self.functions))
 
 
 """class ArrayGen():
