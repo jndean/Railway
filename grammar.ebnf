@@ -11,11 +11,12 @@ func_decl = "func" func_name "(" [parameter]  {","  parameter} ")" "\n"
 
 statement = [let_stmt | unlet_stmt | if_stmt | loop_stmt | for_stmt |
              push_stmt | pop_stmt | swap_stmt | do_stmt | mod_stmt |
-	     try_stmt | catch_stmt | call_stmt | print_stmt] "\n" ;
+	     try_stmt | catch_stmt | call_stmt | uncall_stmt | print_stmt]
+	     "\n" ;
 
-let_stmt = "let" lookup "=" (expression | array_generator | func_call) ;
+let_stmt = "let" lookup "=" (expression | array_generator) ;
 
-unlet_stmt = "unlet" lookup "=" (expression | array_generator | func_call) ;
+unlet_stmt = "unlet" lookup "=" (expression | array_generator) ;
 
 push_stmt = "push" (lookup "=>" lookup) |
 	    	   (lookup "<=" lookup) ;
@@ -59,10 +60,14 @@ mod_stmt = lookup "+=" expression
 
 print_stmt = "print" "(" lookup {"," lookup} ")" ;
 
+call_stmt = "call" [variable "=" ] func_name ["{" expression "}"]
+             "(" [parameter] {',' parameter} ")" ;
+	     
+uncall_stmt = "uncall" [variable "=" ] func_name ["{" expression "}"]
+               "(" [parameter] {',' parameter} ")" ;
+
 array_generator = "[" expression "for" name "in" array_generator "]"
                   | "[" expression "to" expression [ "by" expression ] "]" ;
-
-func_call = func_name ["{" expression "}"] "(" [parameter] {',' parameter} ")" ;
 
 parameter = ["@"] var_name ;
 
