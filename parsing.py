@@ -13,6 +13,7 @@ class RailwaySyntaxError(RuntimeError): pass
 class RailwayIllegalMono(RailwaySyntaxError):  pass
 class RailwaySelfmodification(RailwaySyntaxError):  pass
 class RailwayModifyingYield(RailwaySyntaxError):  pass
+class RailwayTypeError(RailwaySyntaxError):  pass
 
 
 # -------------- Conditions for searching the tree -------------- #
@@ -236,6 +237,42 @@ def generate_parser(tree):
         t = p.pop(0)  # expression or RPAREN
         exit_expr = enter_expr if isinstance(t, Token) else t
         return tree.If(enter_expr, lines, else_lines, exit_expr)
+
+    # -------------------- push pop swap -------------------- #
+
+    @pgen.production('push : PUSH lookup RARROW lookup')
+    @pgen.production('push : PUSH lookup LEQ lookup')
+    @pgen.production('push : POP lookup RARROW lookup')
+    @pgen.production('push : POP lookup LEQ lookup')
+    def pop_push(p):
+        action, lhs, arrow, rhs = p
+        if arrow.gettokentype() == 'RARROW':
+            src, dst = lhs, rhs
+        else:
+            src, dst = rhs, lhs
+        if src.ismono and not dst.ismono:
+            raise RailwayIllegalMono(
+                f'{action.getstr()} statment modifies non-mono '
+                f'variable "{dst.name}" using mono-variable "{src.name}"',
+                scope=scope)
+        if src.name == dst.name:
+            raise RailwaySelfmodification(
+                f'{action.getstr()} statment modifies variable "{dst.name}"'
+                ' using itself',
+                scope=scope)
+        if action.gettokentype() == 'PUSH':
+            if src.index:
+                raise RailwayTypeError(
+                    f'PUSHing element of array "{src.name}"',
+                    scope=scope)
+            if src.isborrowed:
+                raise RailwayTypeError(
+                    f'PUSHing borrowed variable "{src.name}"',
+                    scope=scope)
+            obj = tree.Push
+        else:
+            obj = tree.Pop
+        return obj(src_lookup=src, dst_lookup=dst)
 
     # -------------------- let unlet -------------------- #
 

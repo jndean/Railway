@@ -103,6 +103,30 @@ class Unlet:
                 or self.rhs.search(condition))
 
 
+class Push:
+    __slots__ = ["src_lookup", "dst_lookup"]
+
+    def __init__(self, src_lookup, dst_lookup):
+        self.src_lookup = src_lookup
+        self.dst_lookup = dst_lookup
+
+
+class Pop:
+    __slots__ = ["src_lookup", "dst_lookup"]
+
+    def __init__(self, src_lookup, dst_lookup):
+        self.src_lookup = src_lookup
+        self.dst_lookup = dst_lookup
+
+
+class Swap:
+    __slots__ = ["src_lookup", "dst_lookup"]
+
+    def __init__(self, src_lookup, dst_lookup):
+        self.src_lookup = src_lookup
+        self.dst_lookup = dst_lookup
+
+
 class Modop:
     __slots__ = ["lookup", "op", "inv_op", "expr", "name"]
 
