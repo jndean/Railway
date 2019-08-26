@@ -21,6 +21,7 @@ class RailwayIndexError(RailwayException): pass
 class RailwayTypeError(RailwayException): pass
 class RailwayUndefinedFunction(RailwayException): pass
 class RailwayFailedAssertion(RailwayException): pass
+class RailwayDirectionChange(RailwayException): pass
 
 
 # -------------------- Interpreter-Only Objects ---------------------- #
@@ -63,6 +64,9 @@ class Scope:
             raise RailwayUndefinedVariable(
                 f'Local variable "{name}" does not exist',
                 scope=self)
+
+    def has_monos(self):
+        return bool(self.monos)
 
 
 class Variable:
@@ -159,6 +163,24 @@ class Print(AST.Print):
         return '[' + ', '.join(self.stringify(elt) for elt in memory) + ']'
 
 
+# -------------------- AST - DoUndo --------------------#
+
+class DoUndo(AST.DoUndo):
+    def eval(self, scope, backwards):
+        if scope.has_monos():
+            raise RailwayDirectionChange(
+                'Changing direction of time using DO-YIELD-UNDO '
+                'whilst mono-directional variables are in scope',
+                scope=scope)
+        for line in self.do_lines:
+            line.eval(scope, backwards=False)
+        yield_lines = self.yield_lines
+        for line in reversed(yield_lines) if backwards else yield_lines:
+            line.eval(scope, backwards)
+        for line in reversed(self.do_lines):
+            line.eval(scope, backwards=True)
+
+
 # -------------------- AST - Loop, If --------------------#
 
 class Loop(AST.Loop):
@@ -166,7 +188,7 @@ class Loop(AST.Loop):
         if backwards:
             condition = self.backward_condition
             assertion = self.forward_condition
-            lines = reversed(self.lines)
+            lines = self.lines[::-1]  # reversed builtin no good here
         else:
             condition = self.forward_condition
             assertion = self.backward_condition

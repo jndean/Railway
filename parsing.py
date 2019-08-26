@@ -12,6 +12,7 @@ from lexing import lexer, all_tokens
 class RailwaySyntaxError(RuntimeError): pass
 class RailwayIllegalMono(RailwaySyntaxError):  pass
 class RailwaySelfmodification(RailwaySyntaxError):  pass
+class RailwayModifyingYield(RailwaySyntaxError):  pass
 
 
 # -------------- Conditions for searching the tree -------------- #
@@ -20,8 +21,31 @@ def search_mono_lookups(x):
     return isinstance(x, AST.Lookup) and x.ismono
 
 
-def search_lookup_name(name):
-    return lambda x: isinstance(x, AST.Lookup) and x.name == name
+def search_unyieldable(x):
+    return not (isinstance(x, AST.Let)
+                or isinstance(x, AST.Unlet)
+                or isinstance(x, AST.Print))
+
+
+def search_lookup_name(names):
+    return lambda x: isinstance(x, AST.Lookup) and x.name in names
+
+
+def collect_names(collection):
+    def search_condition(x):
+        if isinstance(x, AST.Lookup) or isinstance(x, AST.Parameter):
+            collection.add(x.name)
+        return False
+    return search_condition
+
+
+# This will need updating later (e.g. for push-pop and call-uncall)
+def collect_lhs_names(collection):
+    def search_condition(x):
+        if isinstance(x, (AST.Modop,)):
+            collection.add(x.lookup.name)
+        return False
+    return search_condition
 
 
 # ------------------- main parser generation method ------------------- #
@@ -118,10 +142,33 @@ def generate_parser(tree):
     @pgen.production('stmt : if')
     @pgen.production('stmt : loop')
     @pgen.production('stmt : modification')
+    @pgen.production('stmt : do')
     @pgen.production('stmt : print')
     @pgen.production('statement : stmt NEWLINE')
     def statement(p):
         return p[0]
+
+    # -------------------- do-yield-undo -------------------- #
+
+    @pgen.production('do : DO NEWLINE'
+                     '      statements'
+                     '     YIELD NEWLINE'
+                     '      statements UNDO')
+    def do_yield_undo(p):
+        do_lines = p[2]
+        yield_lines = p[5]
+        do_names = set()
+        yield_mod_names = set()
+        for line in do_lines:
+            line.search(collect_names(do_names))
+        for line in yield_lines:
+            line.search(collect_lhs_names(yield_mod_names))
+        both = do_names.intersection(yield_mod_names)
+        if both:
+            raise RailwayModifyingYield(
+                f'YIELD block may not modify variable "{both.pop()}" '
+                'which is used in the DO block')
+        return tree.DoUndo(do_lines, yield_lines)
 
     # -------------------- print -------------------- #
 
@@ -145,7 +192,7 @@ def generate_parser(tree):
             raise RailwayIllegalMono(
                 f'Modifying non-mono variable "{lookup.name}" '
                 'using mono expression')
-        if expr.search(search_lookup_name(lookup.name)):
+        if expr.search(search_lookup_name(set([lookup.name]))):
             raise RailwaySelfmodification(
                 f'Statement uses "{lookup.name}" to modify itself')
         return tree.Modop(lookup, op, inv_op, expr, op_name)

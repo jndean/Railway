@@ -151,6 +151,19 @@ class Loop:
                 or any(x.search(condition) for x in self.lines))
 
 
+class DoUndo:
+    __slots__ = ["do_lines", "yield_lines"]
+
+    def __init__(self, do_lines, yield_lines):
+        self.do_lines = do_lines
+        self.yield_lines = yield_lines
+
+    def search(self, condition):
+        return (condition(self)
+                or any(ln.search(condition) for ln in self.do_lines)
+                or any(ln.search(condition) for ln in self.yield_lines))
+
+
 class Print:
     __slots__ = ["target"]
 
@@ -272,6 +285,13 @@ def display(node, indent=0):
         display(node.lines, indent)
         print(start, 'WHILE')
         display(node.backward_condition, indent)
+
+    elif isinstance(node, DoUndo):
+        print(start, 'DO')
+        display(node.do_lines, indent)
+        print(start, 'YIELD')
+        display(node.yield_lines, indent)
+        print(start, 'UNDO')
 
     elif isinstance(node, Function):
         print(start, "FUNC", node.name)
