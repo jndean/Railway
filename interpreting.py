@@ -65,9 +65,6 @@ class Scope:
                 f'Local variable "{name}" does not exist',
                 scope=self)
 
-    def has_monos(self):
-        return bool(self.monos)
-
 
 class Variable:
     __slots__ = ['memory', 'ismono', 'isborrowed', 'isarray']
@@ -163,14 +160,15 @@ class Print(AST.Print):
         return '[' + ', '.join(self.stringify(elt) for elt in memory) + ']'
 
 
-# -------------------- AST - DoUndo --------------------#
+# -------------------- AST - Do-Yield-Undo --------------------#
 
 class DoUndo(AST.DoUndo):
     def eval(self, scope, backwards):
-        if scope.has_monos():
+        if scope.monos:
+            name = next(iter(scope.monos.keys()))
             raise RailwayDirectionChange(
                 'Changing direction of time using DO-YIELD-UNDO '
-                'whilst mono-directional variables are in scope',
+                f'whilst mono-directional variable "{name}" is in scope',
                 scope=scope)
         for line in self.do_lines:
             line.eval(scope, backwards=False)
@@ -346,6 +344,16 @@ class Uniop(AST.Uniop):
                 f'Unary operation {self.name} does not accept arrays',
                 scope=scope)
         return Fraction(self.op(val))
+
+
+class Length(AST.Length):
+    def eval(self, scope):
+        var = scope.lookup(self.lookup.name)
+        if not var.isarray:
+            raise RailwayTypeError(f'Variable "{self.lookup.name}" '
+                                   'has no length as it is not an array',
+                                   scope=scope)
+        return Fraction(len(var.memory))
 
 
 class Lookup(AST.Lookup):
