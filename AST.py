@@ -110,6 +110,11 @@ class Push:
         self.src_lookup = src_lookup
         self.dst_lookup = dst_lookup
 
+    def search(self, condition):
+        return (condition(self)
+                or condition(self.src_lookup)
+                or condition(self.dst_lookup))
+
 
 class Pop:
     __slots__ = ["src_lookup", "dst_lookup"]
@@ -117,6 +122,11 @@ class Pop:
     def __init__(self, src_lookup, dst_lookup):
         self.src_lookup = src_lookup
         self.dst_lookup = dst_lookup
+
+    def search(self, condition):
+        return (condition(self)
+                or condition(self.src_lookup)
+                or condition(self.dst_lookup))
 
 
 class Swap:

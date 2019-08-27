@@ -10,10 +10,11 @@ from lexing import lexer, all_tokens
 # -------------------------- Exceptions -------------------------- #
 
 class RailwaySyntaxError(RuntimeError): pass
-class RailwayIllegalMono(RailwaySyntaxError):  pass
-class RailwaySelfmodification(RailwaySyntaxError):  pass
-class RailwayModifyingYield(RailwaySyntaxError):  pass
-class RailwayTypeError(RailwaySyntaxError):  pass
+class RailwayIllegalMono(RailwaySyntaxError): pass
+class RailwaySelfmodification(RailwaySyntaxError): pass
+# Does ModifyingYield really need to be an error?
+class RailwayModifyingYield(RailwaySyntaxError): pass
+class RailwayTypeError(RailwaySyntaxError): pass
 
 
 # -------------- Conditions for searching the tree -------------- #
@@ -40,11 +41,15 @@ def collect_names(collection):
     return search_condition
 
 
-# This will need updating later (e.g. for push-pop and call-uncall)
+# This will need updating later (e.g. for swap and call-uncall)
 def collect_lhs_names(collection):
     def search_condition(x):
-        if isinstance(x, (AST.Modop,)):
+        if isinstance(x, AST.Modop):
             collection.add(x.lookup.name)
+        elif isinstance(x, AST.Push):
+            collection.add(x.dst_lookup.name)
+        elif isinstance(x, AST.Pop):
+            collection.add(x.src_lookup.name)
         return False
     return search_condition
 
@@ -143,6 +148,7 @@ def generate_parser(tree):
     @pgen.production('stmt : if')
     @pgen.production('stmt : loop')
     @pgen.production('stmt : modification')
+    @pgen.production('stmt : push')
     @pgen.production('stmt : do')
     @pgen.production('stmt : print')
     @pgen.production('statement : stmt NEWLINE')
@@ -158,6 +164,7 @@ def generate_parser(tree):
     def do_yield_undo(p):
         do_lines = p[2]
         yield_lines = p[5]
+        # Does ModifyingYield really need to be an error?
         do_names = set()
         yield_mod_names = set()
         for line in do_lines:
@@ -193,7 +200,7 @@ def generate_parser(tree):
             raise RailwayIllegalMono(
                 f'Modifying non-mono variable "{lookup.name}" '
                 'using mono expression')
-        if expr.search(search_lookup_name(set([lookup.name]))):
+        if expr.search(search_lookup_name({lookup.name})):
             raise RailwaySelfmodification(
                 f'Statement uses "{lookup.name}" to modify itself')
         return tree.Modop(lookup, op, inv_op, expr, op_name)
@@ -250,25 +257,18 @@ def generate_parser(tree):
             src, dst = lhs, rhs
         else:
             src, dst = rhs, lhs
-        if src.ismono and not dst.ismono:
+        if src.ismono ^ dst.ismono:
             raise RailwayIllegalMono(
-                f'{action.getstr()} statment modifies non-mono '
-                f'variable "{dst.name}" using mono-variable "{src.name}"',
-                scope=scope)
+                f'{action.getstr()} requires that either both or neither of '
+                f'variables "{dst.name}" and "{src.name}" be mono-directional')
         if src.name == dst.name:
             raise RailwaySelfmodification(
                 f'{action.getstr()} statment modifies variable "{dst.name}"'
-                ' using itself',
-                scope=scope)
+                ' using itself')
         if action.gettokentype() == 'PUSH':
             if src.index:
                 raise RailwayTypeError(
-                    f'PUSHing element of array "{src.name}"',
-                    scope=scope)
-            if src.isborrowed:
-                raise RailwayTypeError(
-                    f'PUSHing borrowed variable "{src.name}"',
-                    scope=scope)
+                    f'PUSHing element of array "{src.name}"')
             obj = tree.Push
         else:
             obj = tree.Pop

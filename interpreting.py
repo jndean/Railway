@@ -22,6 +22,7 @@ class RailwayTypeError(RailwayException): pass
 class RailwayUndefinedFunction(RailwayException): pass
 class RailwayFailedAssertion(RailwayException): pass
 class RailwayDirectionChange(RailwayException): pass
+class RailwayReferenceOwnership(RailwayException): pass
 
 
 # -------------------- Interpreter-Only Objects ---------------------- #
@@ -44,14 +45,14 @@ class Scope:
         if globals and name in self.globals:
             return self.globals[name]
         raise RailwayUndefinedVariable(
-            f'Variable {name} is undefined',
+            f'Variable "{name}" is undefined',
             scope=self)
 
     def assign(self, name, var):
         namespace = self.monos if var.ismono else self.locals
         if name in namespace:
             raise RailwayVariableExists(
-                f'Variable {name} already exists',
+                f'Variable "{name}" already exists',
                 scope=self)
         namespace[name] = var
 
@@ -98,7 +99,7 @@ class Module(AST.Module):
                       locals={}, monos={}, globals={})
         if 'main' not in self.functions and '~main' not in self.functions:
             raise RailwayUndefinedFunction(
-                f'There is no main function in {self.name}')
+                f'There is no main function in {self.name}', scope=None)
         main = self.functions.get('main', self.functions.get('~main', None))
         try:
             main.eval(scope, backwards=False)
@@ -138,7 +139,7 @@ class Function(AST.Function):
                         f'{self.name} at the end of a call',
                         scope=scope)
             return_names = [] if self.retname is None else [self.retname]
-            return [scope.lookup(nm, globals=False) for nm in return_names]
+        return [scope.lookup(nm, globals=False) for nm in return_names]
 
 
 # -------------------- AST - Print --------------------#
@@ -218,6 +219,67 @@ class If(AST.If):
             raise RailwayFailedAssertion(
                 'Failed exit assertion in if-fi statement',
                 scope=scope)
+
+
+# -------------------- AST - Push Pop Swap --------------------#
+
+class Push(AST.Push):
+    def eval(self, scope, backwards):
+        if backwards:
+            return pop_eval(scope, self.dst_lookup, self.src_lookup)
+        return push_eval(scope, self.src_lookup, self.dst_lookup)
+
+
+def push_eval(scope, src_lookup, dst_lookup):
+    dst_var = scope.lookup(dst_lookup.name)
+    src_var = scope.lookup(src_lookup.name)
+    dst_mem = dst_lookup.eval(scope)
+    src_mem = src_lookup.eval(scope)
+    if not dst_var.isarray:
+        raise RailwayTypeError(f'PUSHing onto "{dst_lookup.name}" '
+                               'which is a number, not an array',
+                               scope=scope)
+    if not isinstance(dst_mem, list):
+        raise RailwayTypeError(
+            f'PUSHing onto a loction in "{dst_lookup.name}" which is '
+            'a number, not an array',
+            scope=scope)
+    if src_var.isborrowed:
+        raise RailwayReferenceOwnership(
+            f'PUSHing borrowed reference "{src_lookup.name}"',
+            scope=scope)
+    dst_mem.append(src_mem)
+    scope.remove(src_lookup.name)
+
+
+class Pop(AST.Pop):
+    def eval(self, scope, backwards):
+        if backwards:
+            return push_eval(scope, self.dst_lookup, self.src_lookup)
+        return pop_eval(scope, self.src_lookup, self.dst_lookup)
+
+
+def pop_eval(scope, src_lookup, dst_lookup):
+    # Opporunity for optimisation: the var.eval duplicates the scope.lookup
+    src_var = scope.lookup(src_lookup.name)
+    src_mem = src_lookup.eval(scope)
+    if not src_var.isarray:
+        raise RailwayTypeError(
+            f'Trying to pop from "{src_lookup.name}" which is a '
+            'number, not an array',
+            scope=scope)
+    try:
+        contents = src_mem.pop()
+    except IndexError:
+        raise RailwayIndexError(
+            f'Popping from empty array "{src_lookup.name}" (or an '
+            'element therin)',
+            scope=scope)
+    isarray = isinstance(contents, list)
+    var = Variable(memory=contents if isarray else [contents],
+                   ismono=dst_lookup.ismono,
+                   isarray=isarray)
+    scope.assign(name=dst_lookup.name, var=var)
 
 
 # -------------------- AST - Modifications --------------------#
