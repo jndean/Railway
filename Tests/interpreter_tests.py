@@ -50,81 +50,88 @@ class ExpressionNodes(unittest.TestCase):
         self.vals = vals
 
     def test_Lookup_eval(self):
-        v = I.Lookup('x', index=tuple(), ismono=False)
+        v = I.Lookup('x', index=tuple(), mononame=False, hasmono=False)
         result = v.eval(scope=self.s)
         self.assertIsInstance(result, I.Fraction)
         self.assertEqual(result, self.vals['x'])
 
-        v = I.Lookup('.x', index=tuple(), ismono=True)
+        v = I.Lookup('.x', index=tuple(), mononame=True, hasmono=True)
         result = v.eval(scope=self.s)
         self.assertIsInstance(result, I.Fraction)
         self.assertEqual(result, self.vals['mono_x'])
 
-        v = I.Lookup('global_x', index=tuple(), ismono=False)
+        v = I.Lookup('global_x', index=tuple(), mononame=False, hasmono=False)
         result = v.eval(scope=self.s)
         self.assertIsInstance(result, I.Fraction)
         self.assertEqual(result, self.vals['global_x'])
 
-        v = I.Lookup('array', index=tuple(), ismono=False)
+        v = I.Lookup('array', index=tuple(), mononame=False, hasmono=False)
         result = v.eval(scope=self.s)
         self.assertIsInstance(result, list)
         self.assertEqual(result[0], self.vals['array'])
 
-        v = I.Lookup('array', index=(I.Fraction(1),), ismono=False)
+        v = I.Lookup('array', index=(I.Fraction(1),), mononame=False,
+                     hasmono=False)
         result = v.eval(scope=self.s)
         self.assertIsInstance(result, I.Fraction)
         self.assertEqual(result, self.vals['array'])
 
         with self.assertRaises(I.RailwayUndefinedVariable):
-            v = I.Lookup('notarray', index=(I.Fraction(1),), ismono=False)
+            v = I.Lookup('notarray', index=(I.Fraction(1),), mononame=False,
+                         hasmono=False)
             v.eval(scope=self.s)
 
         with self.assertRaises(I.RailwayIndexError):
-            v = I.Lookup('array', index=(I.Fraction(100),), ismono=False)
+            v = I.Lookup('array', index=(I.Fraction(100),), mononame=False,
+                         hasmono=False)
             v.eval(scope=self.s)
 
         with self.assertRaises(I.RailwayIndexError):
-            v = I.Lookup('array', index=(I.Fraction(-100),), ismono=False)
+            v = I.Lookup('array', index=(I.Fraction(-100),), mononame=False,
+                         hasmono=False)
             v.eval(scope=self.s)
 
         with self.assertRaises(I.RailwayIndexError):
-            v = I.Lookup('x', index=(I.Fraction(1),), ismono=False)
+            v = I.Lookup('x', index=(I.Fraction(1),), mononame=False,
+                         hasmono=False)
             v.eval(scope=self.s)
 
     def test_Lookup_set(self):
-        v = I.Lookup('x', index=tuple(), ismono=False)
+        v = I.Lookup('x', index=tuple(), mononame=False, hasmono=False)
         val = I.Fraction(99)
         v.set(scope=self.s, value=val)
         result = v.eval(scope=self.s)
         self.assertIs(val, result)
 
-        v = I.Lookup('array2d', index=(I.Fraction(1),), ismono=False)
+        v = I.Lookup('array2d', index=(I.Fraction(1),), mononame=False,
+                     hasmono=False)
         with self.assertRaises(I.RailwayTypeError):
             v.set(scope=self.s, value=val)
 
         v = I.Lookup('array2d',
                      index=(I.Fraction(1), I.Fraction(1)),
-                     ismono=False)
+                     mononame=False, hasmono=False)
         with self.assertRaises(I.RailwayIndexError):
             v.set(scope=self.s, value=val)
 
         v = I.Lookup('array2d',
                      index=(I.Fraction(1), I.Fraction(0), I.Fraction(0)),
-                     ismono=False)
+                     mononame=False, hasmono=False)
         with self.assertRaises(I.RailwayIndexError):
             v.set(scope=self.s, value=val)
 
         v = I.Lookup('array2d',
                      index=(I.Fraction(1), I.Fraction(0)),
-                     ismono=False)
+                     mononame=False, hasmono=False)
         val = I.Fraction(0.111)
         v.set(scope=self.s, value=val)
         result = v.eval(scope=self.s)
         self.assertIs(result, val)
 
     def test_Binop(self):
-        lhs = I.Lookup('x', index=tuple(), ismono=False)
-        rhs = I.Lookup('array', index=(I.Fraction(0),), ismono=False)
+        lhs = I.Lookup('x', index=tuple(), mononame=False, hasmono=False)
+        rhs = I.Lookup('array', index=(I.Fraction(0),), mononame=False,
+                       hasmono=False)
         a, b = self.vals['x'], self.vals['array']
         ba, bb = bool(a), bool(b)
         cases = {'ADD': a+b, 'SUB': a-b, 'MUL': a*b, 'DIV': a/b, 'IDIV': a//b,
@@ -132,25 +139,28 @@ class ExpressionNodes(unittest.TestCase):
                  'AND': ba & bb, 'LESS': a < b, 'LEQ': a <= b, 'GREAT': a > b,
                  'GEQ': a >= b, 'EQ': a == b, 'NEQ': a != b}
         for name, groundtruth in cases.items():
-            result = I.Binop(lhs, I.binops[name], rhs).eval(scope=self.s)
+            result = I.Binop(lhs, I.binops[name], rhs, hasmono=False
+                             ).eval(scope=self.s)
             self.assertEqual(result, I.Fraction(groundtruth))
 
         with self.assertRaises(I.RailwayTypeError):
-            lhs = I.Lookup('x', index=tuple(), ismono=False)
-            rhs = I.Lookup('array', index=tuple(), ismono=False)
-            I.Binop(lhs, I.binops['ADD'], rhs).eval(scope=self.s)
+            lhs = I.Lookup('x', index=tuple(), mononame=False, hasmono=False)
+            rhs = I.Lookup('array', index=tuple(), mononame=False,
+                           hasmono=False)
+            I.Binop(lhs, I.binops['ADD'], rhs, hasmono=False).eval(scope=self.s)
 
     def test_Uniop(self):
-        lhs = I.Lookup('x', index=tuple(), ismono=False)
+        lhs = I.Lookup('x', index=tuple(), mononame=False, hasmono=False)
         x = self.vals['x']
         cases = {'SUB': -x, 'NOT': I.Fraction(not bool(x))}
         for name, groundtruth in cases.items():
-            result = I.Uniop(I.uniops[name], lhs).eval(scope=self.s)
+            result = I.Uniop(I.uniops[name], lhs, hasmono=False).eval(scope=self.s)
             self.assertEqual(result, groundtruth)
 
         with self.assertRaises(I.RailwayTypeError):
-            lhs = I.Lookup('array', index=tuple(), ismono=False)
-            I.Uniop(I.uniops['SUB'], lhs).eval(scope=self.s)
+            lhs = I.Lookup('array', index=tuple(), mononame=False,
+                           hasmono=False)
+            I.Uniop(I.uniops['SUB'], lhs, hasmono=False).eval(scope=self.s)
 
 
 class LetUnletNodes(unittest.TestCase):
@@ -230,36 +240,47 @@ class LetUnletNodes(unittest.TestCase):
             I.compare_memory(x, y)
 
     def test_let(self):
-        let = I.Let(lookup=I.Lookup(name='y', index=tuple(), ismono=False),
-                    rhs=None)
+        let = I.Let(lookup=I.Lookup(name='y', index=tuple(),
+                                    mononame=False, hasmono=False),
+                    rhs=None, ismono=False, hasswitch=False, modreverse=True)
         let.eval(scope=self.s, backwards=False)
         self.assertEqual(
-            I.Lookup('y', index=tuple(), ismono=False).eval(self.s),
+            I.Lookup('y', index=tuple(), mononame=False, hasmono=False
+                     ).eval(self.s),
             I.Fraction(0))
 
         with self.assertRaises(I.RailwayVariableExists):
-            let = I.Let(lookup=I.Lookup(name='y', index=tuple(), ismono=False),
-                        rhs=None)
+            let = I.Let(lookup=I.Lookup(name='y', index=tuple(),
+                                        mononame=False, hasmono=False),
+                        rhs=None, ismono=False, hasswitch=False,
+                        modreverse=True)
             let.eval(scope=self.s, backwards=False)
 
         with self.assertRaises(I.RailwayVariableExists):
-            let = I.Let(lookup=I.Lookup(name='.x', index=tuple(), ismono=True),
-                        rhs=None)
+            let = I.Let(lookup=I.Lookup(name='.x', index=tuple(), mononame=True,
+                                        hasmono=True),
+                        rhs=None, ismono=False, hasswitch=False,
+                        modreverse=True)
             let.eval(scope=self.s, backwards=False)
 
-        let = I.Let(lookup=I.Lookup(name='y1', index=tuple(), ismono=False),
-                    rhs=I.Lookup(name='x', index=tuple(), ismono=False))
+        let = I.Let(lookup=I.Lookup(name='y1', index=tuple(), mononame=False,
+                                    hasmono=False),
+                    rhs=I.Lookup(name='x', index=tuple(), mononame=False,
+                                 hasmono=False),
+                    ismono=False, hasswitch=False, modreverse=True)
         let.eval(scope=self.s, backwards=False)
         self.assertEqual(
-            I.Lookup('y1', index=tuple(), ismono=False).eval(self.s),
+            I.Lookup('y1', index=tuple(), mononame=False, hasmono=False
+                     ).eval(self.s),
             self.vals['x'])
 
         let = I.Let(lookup=I.Lookup(name='array2',
                                     index=(I.Fraction(2), I.Fraction(2)),
-                                    ismono=False),
+                                    mononame=False, hasmono=False),
                     rhs=I.Lookup(name='x',
                                  index=tuple(),
-                                 ismono=False))
+                                 mononame=False, hasmono=False),
+                    ismono=False, hasswitch=False, modreverse=True)
         let.eval(scope=self.s, backwards=False)
         for row in self.s.lookup(name='array2').memory:
             for elt in row:
@@ -268,18 +289,20 @@ class LetUnletNodes(unittest.TestCase):
         with self.assertRaises(I.RailwayIndexError):
             let = I.Let(lookup=I.Lookup(name='z',
                                         index=tuple(),
-                                        ismono=False),
+                                        mononame=False, hasmono=False),
                         rhs=I.Lookup(name='array',
                                      index=tuple(),
-                                     ismono=False))
+                                     mononame=False, hasmono=False),
+                        ismono=False, hasswitch=False, modreverse=True)
             let.eval(scope=self.s, backwards=False)
 
         let = I.Let(lookup=I.Lookup(name='z',
                                     index=tuple(),
-                                    ismono=False),
+                                    mononame=False, hasmono=False),
                     rhs=I.Lookup(name='array',
                                  index=(I.Fraction(3),),
-                                 ismono=False))
+                                 mononame=False, hasmono=False),
+                    ismono=False, hasswitch=False, modreverse=True)
         let.eval(scope=self.s, backwards=False)
         self.assertEqual(self.s.lookup('z').memory[0],
                          self.vals['array'])
@@ -288,8 +311,9 @@ class LetUnletNodes(unittest.TestCase):
         unlet = I.Unlet(lookup=I.Lookup(
                             name='badvar',
                             index=tuple(),
-                            ismono=False),
-                        rhs=I.Fraction(19, 67))
+                            mononame=False, hasmono=False),
+                        rhs=I.Fraction(19, 67),
+                        ismono=False, hasswitch=False, modreverse=True)
         with self.assertRaises(I.RailwayUndefinedVariable):
             unlet.eval(scope=self.s, backwards=False)
         unlet.eval(scope=self.s, backwards=True)
@@ -301,11 +325,12 @@ class LetUnletNodes(unittest.TestCase):
         unlet = I.Unlet(lookup=I.Lookup(
                             name='x',
                             index=tuple(),
-                            ismono=False),
+                            mononame=False, hasmono=False),
                         rhs=I.Lookup(
                             name='array',
                             index=tuple(),
-                            ismono=False))
+                            mononame=False, hasmono=False),
+                        ismono=False, hasswitch=False, modreverse=True)
         with self.assertRaises(I.RailwayIndexError):
             unlet.eval(scope=self.s, backwards=False)
 

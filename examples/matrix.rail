@@ -28,9 +28,10 @@ func argmax_alt(X)
   for (i = 0)
     if (X[i] > X[.best])
       .best = i
-    fi
+    fi ()
   rof (#X)
-return .best
+  promote .best => best
+return best
 
 	
 func main(argv)

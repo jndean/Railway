@@ -117,24 +117,25 @@ class Function(AST.Function):
             line.eval(scope, backwards=backwards)
         if backwards:
             param_names = set(p.name for p in self.parameters)
-            existing_names = set(scope.locals).union(set(scope.monos))
+            reversible_names = set(scope.locals)
+            existing_names = reversible_names.union(set(scope.monos))
+            leaked = reversible_names.difference(param_names)
             missing = param_names.difference(existing_names)
-            leaked = existing_names.difference(param_names)
-            if missing:
-                raise RailwayUndefinedVariable(
-                    f'Parameter "{missing.pop()}" is not in scope of function '
-                    f'{self.name} at the end of an uncall',
-                    scope=scope)
             if leaked:
                 raise RailwayLeakedInformation(
                         f'Variable "{leaked.pop()}" is still in scope of '
                         f'function {self.name} at the end of an uncall',
                         scope=scope)
+            if missing:
+                raise RailwayUndefinedVariable(
+                    f'Parameter "{missing.pop()}" is not in scope of function '
+                    f'{self.name} at the end of an uncall',
+                    scope=scope)
             return_names = [p.name for p in self.parameters if not p.isborrowed]
         else:
-            for name, var in chain(scope.locals.items(), scope.monos.items()):
-                if not var.isborrowed and name != self.retname:
-                    RailwayLeakedInformation(
+            for name, var in scope.locals.items():
+                if (not var.isborrowed) and name != self.retname:
+                    raise RailwayLeakedInformation(
                         f'Variable "{name}" is still in scope of function '
                         f'{self.name} at the end of a call',
                         scope=scope)
@@ -146,8 +147,8 @@ class Function(AST.Function):
 
 class Print(AST.Print):
     def eval(self, scope, backwards=False):
-        # if backwards:
-        #     return
+        if backwards:
+            return
         if isinstance(self.target, str):
             print(self.target)
         else:
@@ -165,17 +166,23 @@ class Print(AST.Print):
 
 class DoUndo(AST.DoUndo):
     def eval(self, scope, backwards):
-        if scope.monos:
-            name = next(iter(scope.monos.keys()))
-            raise RailwayDirectionChange(
-                'Changing direction of time using DO-YIELD-UNDO '
-                f'whilst mono-directional variable "{name}" is in scope',
-                scope=scope)
         for line in self.do_lines:
             line.eval(scope, backwards=False)
+        if scope.monos and backwards:
+            name = next(iter(scope.monos.keys()))
+            raise RailwayDirectionChange(
+                'Changing direction of time at the end of a do block '
+                f'whilst mono-directional variable "{name}" is in scope',
+                scope=scope)
         yield_lines = self.yield_lines
         for line in reversed(yield_lines) if backwards else yield_lines:
             line.eval(scope, backwards)
+        if scope.monos and not backwards:
+            name = next(iter(scope.monos.keys()))
+            raise RailwayDirectionChange(
+                'Changing direction of time using an undo block '
+                f'whilst mono-directional variable "{name}" is in scope',
+                scope=scope)
         for line in reversed(self.do_lines):
             line.eval(scope, backwards=True)
 
@@ -185,9 +192,11 @@ class DoUndo(AST.DoUndo):
 class Loop(AST.Loop):
     def eval(self, scope, backwards):
         if backwards:
+            if not self.modreverse:
+                return
             condition = self.backward_condition
             assertion = self.forward_condition
-            lines = self.lines[::-1]  # reversed builtin no good here
+            lines = self.lines[::-1]  # reversed() builtin no good here
         else:
             condition = self.forward_condition
             assertion = self.backward_condition
@@ -208,6 +217,8 @@ class Loop(AST.Loop):
 
 class If(AST.If):
     def eval(self, scope, backwards):
+        if backwards and not self.modreverse:
+            return
         enter_expr = self.exit_expr if backwards else self.enter_expr
         exit_expr = self.enter_expr if backwards else self.exit_expr
         enter_result = bool(enter_expr.eval(scope))
@@ -226,6 +237,8 @@ class If(AST.If):
 class Push(AST.Push):
     def eval(self, scope, backwards):
         if backwards:
+            if self.ismono:
+                return
             return pop_eval(scope, self.dst_lookup, self.src_lookup)
         return push_eval(scope, self.src_lookup, self.dst_lookup)
 
@@ -241,12 +254,12 @@ def push_eval(scope, src_lookup, dst_lookup):
                                scope=scope)
     if not isinstance(dst_mem, list):
         raise RailwayTypeError(
-            f'PUSHing onto a loction in "{dst_lookup.name}" which is '
+            f'Pushing onto a loction in "{dst_lookup.name}" which is '
             'a number, not an array',
             scope=scope)
     if src_var.isborrowed:
         raise RailwayReferenceOwnership(
-            f'PUSHing borrowed reference "{src_lookup.name}"',
+            f'Pushing borrowed reference "{src_lookup.name}"',
             scope=scope)
     dst_mem.append(src_mem)
     scope.remove(src_lookup.name)
@@ -255,6 +268,8 @@ def push_eval(scope, src_lookup, dst_lookup):
 class Pop(AST.Pop):
     def eval(self, scope, backwards):
         if backwards:
+            if self.ismono:
+                return
             return push_eval(scope, self.dst_lookup, self.src_lookup)
         return pop_eval(scope, self.src_lookup, self.dst_lookup)
 
@@ -277,7 +292,7 @@ def pop_eval(scope, src_lookup, dst_lookup):
             scope=scope)
     isarray = isinstance(contents, list)
     var = Variable(memory=contents if isarray else [contents],
-                   ismono=dst_lookup.ismono,
+                   ismono=dst_lookup.mononame,
                    isarray=isarray)
     scope.assign(name=dst_lookup.name, var=var)
 
@@ -286,6 +301,8 @@ def pop_eval(scope, src_lookup, dst_lookup):
 
 class Modop(AST.Modop):
     def eval(self, scope, backwards):
+        if backwards and self.ismono:
+            return
         op = self.inv_op if backwards else self.op
         lhs, rhs = self.lookup.eval(scope), self.expr.eval(scope)
         result = Fraction(op(lhs, rhs))
@@ -299,6 +316,8 @@ class Modop(AST.Modop):
 class Let(AST.Let):
     def eval(self, scope, backwards):
         if backwards:
+            if self.ismono:
+                return
             return unlet_eval(self, scope)
         return let_eval(self, scope)
 
@@ -306,6 +325,8 @@ class Let(AST.Let):
 class Unlet(AST.Unlet):
     def eval(self, scope, backwards):
         if backwards:
+            if self.ismono:
+                return
             return let_eval(self, scope)
         return unlet_eval(self, scope)
 
@@ -331,13 +352,16 @@ def let_eval(self, scope):
         raise RailwayIndexError(
             f'Initilising "{lhs.name}" with an array of insufficient dimension',
             scope=scope)
-    var = Variable(memory=memory, ismono=lhs.ismono, isarray=isarray)
+    var = Variable(memory=memory, ismono=lhs.mononame, isarray=isarray)
     scope.assign(name=lhs.name, var=var)
 
 
 def unlet_eval(self, scope):
     lhs, rhs = self.lookup, self.rhs
     var = scope.lookup(name=lhs.name, globals=False)
+    if var.isborrowed:
+        raise RailwayReferenceOwnership(
+            f'Unletting borrowed reference "{lhs.name}"', scope=scope)
     if var.isarray != bool(lhs.index):
         raise RailwayTypeError(
             f'Variable "{lhs.name}" is {"" if var.isarray else "not"} an '

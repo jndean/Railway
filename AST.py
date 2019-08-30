@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from fractions import Fraction as BuiltinFraction
 
 
@@ -10,19 +11,48 @@ modops = dict((k, None) for k in [
     'MODADD', 'MODSUB', 'MODMUL', 'MODDIV'])
 
 
+class ExpressionNode(ABC):
+    __slots__ = ["hasmono"]
+
+    def __init__(self, hasmono):
+        self.hasmono = hasmono  # Node or subnode uses a mono variable
+
+    @abstractmethod
+    def uses_var(self, name):
+        pass
+
+
+class StatementNode(ABC):
+    __slots__ = ["ismono", "modreverse", "hasswitch"]
+
+    def __init__(self, ismono, modreverse, hasswitch):
+        self.ismono = ismono  # Node is only executed forward
+        self.modreverse = modreverse  # (Sub)Node modifies a non-mono var
+        self.hasswitch = hasswitch  # (Sub)Node switches direction of time
+
+
 class Fraction(BuiltinFraction):
+    hasmono = False
+
     def search(self, condition):
         return condition(self)
 
+    def uses_var(self, name):
+        return False
 
-class Binop:
+
+class Binop(ExpressionNode):
     __slots__ = ["lhs", "op", "rhs", "name"]
 
-    def __init__(self, lhs, op, rhs, name="UNNAMED"):
+    def __init__(self, lhs, op, rhs, name="UNNAMED", **kwargs):
+        super().__init__(**kwargs)
         self.lhs = lhs
         self.op = op
         self.rhs = rhs
         self.name = name
+
+    def uses_var(self, name):
+        return self.lhs.uses_var(name) or self.rhs.uses_var(name)
 
     def search(self, condition):
         return (condition(self)
@@ -30,25 +60,33 @@ class Binop:
                 or self.rhs.search(condition))
 
 
-class Uniop:
+class Uniop(ExpressionNode):
     __slots__ = ["op", "expr", "name"]
 
-    def __init__(self, op, expr, name="UNNAMED"):
+    def __init__(self, op, expr, name="UNNAMED", **kwargs):
+        super().__init__(**kwargs)
         self.op = op
         self.expr = expr
         self.name = name
+
+    def uses_var(self, name):
+        return self.expr.uses_var(name)
 
     def search(self, condition):
         return condition(self) or self.expr.search(condition)
 
 
-class Lookup:
-    __slots__ = ["name", "index", "ismono"]
+class Lookup(ExpressionNode):
+    __slots__ = ["name", "index", "mononame"]
 
-    def __init__(self, name, index, ismono):
+    def __init__(self, name, index, mononame, **kwargs):
+        super().__init__(**kwargs)
         self.name = name
         self.index = index
-        self.ismono = ismono
+        self.mononame = mononame
+
+    def uses_var(self, name):
+        return (self.name == name) or any(i.uses_var(name) for i in self.index)
 
     def search(self, condition):
         return (condition(self)
@@ -56,31 +94,36 @@ class Lookup:
 
 
 class Parameter:
-    __slots__ = ["name", "isborrowed", "ismono"]
+    __slots__ = ["name", "mononame", "isborrowed"]
 
-    def __init__(self, name, isborrowed, ismono):
+    def __init__(self, name, mononame, isborrowed):
         self.name = name
+        self.mononame = mononame
         self.isborrowed = isborrowed
-        self.ismono = ismono
 
     def search(self, condition):
         return condition(self)
 
 
-class Length:
+class Length(ExpressionNode):
     __slots__ = ["lookup"]
 
-    def __init__(self, lookup):
+    def __init__(self, lookup, **kwargs):
+        super().__init__(**kwargs)
         self.lookup = lookup
+
+    def uses_var(self, name):
+        return self.lookup.uses_var(name)
 
     def search(self, condition):
         return condition(self) or self.lookup.search(condition)
 
 
-class Let:
+class Let(StatementNode):
     __slots__ = ["lookup", "rhs"]
 
-    def __init__(self, lookup, rhs):
+    def __init__(self, lookup, rhs, **kwargs):
+        super().__init__(**kwargs)
         self.lookup = lookup
         self.rhs = rhs
 
@@ -90,10 +133,11 @@ class Let:
                 or self.rhs.search(condition))
 
 
-class Unlet:
+class Unlet(StatementNode):
     __slots__ = ["lookup", "rhs"]
 
-    def __init__(self, lookup, rhs):
+    def __init__(self, lookup, rhs,  **kwargs):
+        super().__init__(**kwargs)
         self.lookup = lookup
         self.rhs = rhs
 
@@ -103,10 +147,11 @@ class Unlet:
                 or self.rhs.search(condition))
 
 
-class Push:
+class Push(StatementNode):
     __slots__ = ["src_lookup", "dst_lookup"]
 
-    def __init__(self, src_lookup, dst_lookup):
+    def __init__(self, src_lookup, dst_lookup, **kwargs):
+        super().__init__(**kwargs)
         self.src_lookup = src_lookup
         self.dst_lookup = dst_lookup
 
@@ -116,10 +161,11 @@ class Push:
                 or condition(self.dst_lookup))
 
 
-class Pop:
+class Pop(StatementNode):
     __slots__ = ["src_lookup", "dst_lookup"]
 
-    def __init__(self, src_lookup, dst_lookup):
+    def __init__(self, src_lookup, dst_lookup, **kwargs):
+        super().__init__(**kwargs)
         self.src_lookup = src_lookup
         self.dst_lookup = dst_lookup
 
@@ -129,18 +175,20 @@ class Pop:
                 or condition(self.dst_lookup))
 
 
-class Swap:
+class Swap(StatementNode):
     __slots__ = ["src_lookup", "dst_lookup"]
 
-    def __init__(self, src_lookup, dst_lookup):
+    def __init__(self, src_lookup, dst_lookup, **kwargs):
+        super().__init__(**kwargs)
         self.src_lookup = src_lookup
         self.dst_lookup = dst_lookup
 
 
-class Modop:
+class Modop(StatementNode):
     __slots__ = ["lookup", "op", "inv_op", "expr", "name"]
 
-    def __init__(self, lookup, op, inv_op, expr, name="UNNAMED"):
+    def __init__(self, lookup, op, inv_op, expr, name="UNNAMED", **kwargs):
+        super().__init__(**kwargs)
         self.lookup = lookup
         self.op = op
         self.inv_op = inv_op
@@ -153,10 +201,11 @@ class Modop:
                 or self.expr.search(condition))
 
 
-class If:
+class If(StatementNode):
     __slots__ = ["enter_expr", "lines", "else_lines", "exit_expr"]
 
-    def __init__(self, enter_expr, lines, else_lines, exit_expr):
+    def __init__(self, enter_expr, lines, else_lines, exit_expr, **kwargs):
+        super().__init__(**kwargs)
         self.enter_expr = enter_expr
         self.lines = lines
         self.else_lines = else_lines
@@ -170,10 +219,11 @@ class If:
                 or any(x.search(condition) for x in self.else_lines))
 
 
-class Loop:
+class Loop(StatementNode):
     __slots__ = ["forward_condition", "lines", "backward_condition"]
 
-    def __init__(self, forward_condition, lines, backward_condition):
+    def __init__(self, forward_condition, lines, backward_condition, **kwargs):
+        super().__init__(**kwargs)
         self.forward_condition = forward_condition
         self.lines = lines
         self.backward_condition = backward_condition
@@ -185,10 +235,11 @@ class Loop:
                 or any(x.search(condition) for x in self.lines))
 
 
-class DoUndo:
+class DoUndo(StatementNode):
     __slots__ = ["do_lines", "yield_lines"]
 
-    def __init__(self, do_lines, yield_lines):
+    def __init__(self, do_lines, yield_lines, **kwargs):
+        super().__init__(**kwargs)
         self.do_lines = do_lines
         self.yield_lines = yield_lines
 
@@ -198,10 +249,11 @@ class DoUndo:
                 or any(ln.search(condition) for ln in self.yield_lines))
 
 
-class Print:
+class Print(StatementNode):
     __slots__ = ["target"]
 
-    def __init__(self, target):
+    def __init__(self, target, **kwargs):
+        super().__init__(**kwargs)
         self.target = target
 
     def search(self, condition):
@@ -209,14 +261,16 @@ class Print:
 
 
 class Function:
-    __slots__ = ["name", "isswitch", "parameters", "lines", "retname"]
+    __slots__ = ["name", "hasswitch", "parameters", "lines", "retname",
+                 "modreverse"]
 
-    def __init__(self, name, isswitch, parameters, lines, retname):
+    def __init__(self, name, hasswitch, parameters, lines, retname, modreverse):
         self.name = name
-        self.isswitch = isswitch
+        self.hasswitch = hasswitch
         self.parameters = parameters
         self.lines = lines
         self.retname = retname
+        self.modreverse = modreverse
 
     def search(self, condition):
         return (condition(self)
@@ -264,14 +318,13 @@ def display(node, indent=0):
         display(node.expr, indent)
 
     elif isinstance(node, Lookup):
-        print(start, node.name + '[]' * len(node.index),
-              "(ismono)" if node.ismono else "")
+        print(start, node.name + '[]' * len(node.index))
         for idx in node.index:
             display(idx, indent)
 
     elif isinstance(node, Parameter):
         out = '@' if node.isborrowed else ''
-        out += '.'if node.ismono else ''
+        out += '.'if node.mononame else ''
         out += node.name
         print(start, out)
 

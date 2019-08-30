@@ -14,9 +14,9 @@ statement = [let_stmt | unlet_stmt | if_stmt | loop_stmt | for_stmt |
 	     try_stmt | catch_stmt | call_stmt | uncall_stmt | print_stmt]
 	     "\n" ;
 
-let_stmt = "let" lookup "=" (expression | array_generator) ;
+let_stmt = "let" lookup "=" (expression | array) ;
 
-unlet_stmt = "unlet" lookup "=" (expression | array_generator) ;
+unlet_stmt = "unlet" lookup "=" (expression | array) ;
 
 push_stmt = "push" (lookup "=>" lookup) |
 	    	   (lookup "<=" lookup) ;
@@ -47,7 +47,7 @@ do_stmt = "do" "\n"
 
 yieldable_statement = [let_stmt | unlet_stmt | print_stmt] "\n" ;
 
-try_stmt = "try" "(" name "in" lookup | array_generator ")" "\n"
+try_stmt = "try" "(" name "in" lookup | array ")" "\n"
            {statement}
 	   "yrt" ;
 
@@ -66,8 +66,12 @@ call_stmt = "call" [variable "=" ] func_name ["{" expression "}"]
 uncall_stmt = "uncall" [variable "=" ] func_name ["{" expression "}"]
                "(" [parameter] {',' parameter} ")" ;
 
-array_generator = "[" expression "for" name "in" array_generator "]"
+array = array_literal | array_generator ;
+
+array_generator = "[" expression "for" name "in" array "]"
                   | "[" expression "to" expression [ "by" expression ] "]" ;
+
+array_literal = "[" [expression] {"," expression} "]" ;
 
 parameter = ["@"] var_name ;
 
