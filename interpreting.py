@@ -198,18 +198,19 @@ class Loop(AST.Loop):
             condition = self.forward_condition
             assertion = self.backward_condition
             lines = self.lines
-        if assertion.eval(scope):
+        if not self.ismono and assertion.eval(scope):
             raise RailwayFailedAssertion(
                 'Loop reverse condition is true before loop start',
                 scope=scope)
         while condition.eval(scope):
             for line in lines:
                 line.eval(scope, backwards)
-            if not assertion.eval(scope):
-                raise RailwayFailedAssertion(
-                    'Foward loop condition holds when'
-                    ' reverse condition does not',
-                    scope=scope)
+            if not self.ismono:
+                if not assertion.eval(scope):
+                    raise RailwayFailedAssertion(
+                        'Foward loop condition holds when'
+                        ' reverse condition does not',
+                        scope=scope)
 
 
 class If(AST.If):
@@ -222,11 +223,12 @@ class If(AST.If):
         lines = self.lines if enter_result else self.else_lines
         for line in reversed(lines) if backwards else lines:
             line.eval(scope, backwards)
-        exit_result = bool(exit_expr.eval(scope))
-        if exit_result != enter_result:
-            raise RailwayFailedAssertion(
-                'Failed exit assertion in if-fi statement',
-                scope=scope)
+        if not self.ismono:
+            exit_result = bool(exit_expr.eval(scope))
+            if exit_result != enter_result:
+                raise RailwayFailedAssertion(
+                    'Failed exit assertion in if-fi statement',
+                    scope=scope)
 
 
 # -------------------- AST - Push Pop Swap --------------------#
@@ -370,9 +372,10 @@ def unlet_eval(self, scope):
             f'array but Unlet has {"no" if var.isarray else""} indices',
             scope=scope)
     try:
-        compare_memory(
-            var.memory if var.isarray else var.memory[0],
-            rhs.eval(scope=scope) if rhs is not None else Fraction(0))
+        if not self.ismono:
+            compare_memory(
+                var.memory if var.isarray else var.memory[0],
+                rhs.eval(scope=scope) if rhs is not None else Fraction(0))
     except IndexError:
         raise RailwayIndexError(f'Unletting variable "{lhs.name}" '
                                 'using expression of incorrect shape',

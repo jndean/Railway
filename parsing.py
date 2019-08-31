@@ -191,11 +191,18 @@ def generate_parser(tree):
     @pgen.production('loop : LOOP LPAREN expression RPAREN NEWLINE'
                      '         statements'
                      '       POOL LPAREN expression RPAREN')
+    @pgen.production('loop : LOOP LPAREN expression RPAREN NEWLINE'
+                     '         statements'
+                     '       POOL LPAREN RPAREN')
     def loop(p):
         forward_condition = p[2]
         lines = p[5]
-        backward_condition = p[8]
-        ismono = forward_condition.hasmono or backward_condition.hasmono
+        backward_condition = None if (len(p) == 9) else p[8]
+        ismono = (forward_condition.hasmono or (backward_condition is not None
+                                                and backward_condition.hasmono))
+        if ismono == (backward_condition is not None):
+            raise RailwaySyntaxError('A loop should have a reverse condition '
+                                     'if and only if it is bi-directional')
         modreverse = any(i.modreverse for i in lines)
         hasswitch = any(i.hasswitch for i in lines)
         if ismono and modreverse:
@@ -222,17 +229,17 @@ def generate_parser(tree):
                      '     ELSE NEWLINE statements'
                      '     FI LPAREN RPAREN')
     def _if(p):
-        _, _, enter_expr, _, _, lines = p[:6]
-        p = p[6:]
-        if p.pop(0).gettokentype() == 'ELSE':
-            else_lines = p[1]
-            p = p[4:]
+        _, _, enter_expr, _, _, lines, *p = p
+        if p[0].gettokentype() == 'ELSE':
+            _, _, else_lines, _, _, *p = p
         else:
             else_lines = []
-            p.pop(0)  # LPAREN
-        t = p.pop(0)  # expression or RPAREN
-        exit_expr = enter_expr if isinstance(t, Token) else t
+            p = p[2:]
+        exit_expr = enter_expr if isinstance(p[0], Token) else p[0]
         ismono = enter_expr.hasmono or exit_expr.hasmono
+        if ismono and (exit_expr is not enter_expr):
+            raise RailwaySyntaxError('Provided a reverse condition for a mono-'
+                                     'directional if-statement')
         modreverse = any(i.modreverse for i in lines + else_lines)
         hasswitch = any(i.hasswitch for i in lines + else_lines)
         if ismono and modreverse:
