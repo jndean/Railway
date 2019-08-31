@@ -23,6 +23,7 @@ class RailwayUndefinedFunction(RailwayException): pass
 class RailwayFailedAssertion(RailwayException): pass
 class RailwayDirectionChange(RailwayException): pass
 class RailwayReferenceOwnership(RailwayException): pass
+class RailwayZeroError(RailwayException): pass
 
 
 # -------------------- Interpreter-Only Objects ---------------------- #
@@ -305,7 +306,12 @@ class Modop(AST.Modop):
             return
         op = self.inv_op if backwards else self.op
         lhs, rhs = self.lookup.eval(scope), self.expr.eval(scope)
-        result = Fraction(op(lhs, rhs))
+        try:
+            result = Fraction(op(lhs, rhs))
+        except ZeroDivisionError:
+            raise RailwayZeroError(
+                ('Multiplying' if self.name == 'MODMUL' else 'Dividing') +
+                f' variable "{self.lookup.name}" by 0', scope=scope)
         self.lookup.set(scope, result)
         # The seperate lookup.eval and lookup.set calls are
         # an opportunity for optimisation
@@ -524,10 +530,20 @@ binops = {'ADD': lambda a, b: a + b,
 uniops = {'NOT': lambda x: not bool(x),
           'SUB': lambda x: -x}
 
+def __modop_mul(a, b):
+    if b == 0:
+        raise ZeroDivisionError()
+    return a * b
+
+def __modop_div(a, b):
+    if b == 0:
+        raise ZeroDivisionError()
+    return a * b
+
 modops = {'MODADD': lambda a, b: a + b,
           'MODSUB': lambda a, b: a - b,
-          'MODMUL': lambda a, b: a * b,
-          'MODDIV': lambda a, b: a / b}
+          'MODMUL': __modop_mul,
+          'MODDIV': __modop_div}
 
 inv_modops = {'MODADD': modops['MODSUB'],
               'MODSUB': modops['MODADD'],
