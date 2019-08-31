@@ -53,10 +53,7 @@ try_stmt = "try" "(" name "in" lookup | array ")" "\n"
 
 catch_stmt = "catch" "(" expression ")" ;
 
-mod_stmt = lookup "+=" expression
-         | lookup "-=" expression
-         | lookup "*=" expression
-         | lookup "/=" expression ;
+mod_stmt = lookup modification_op expression ;
 
 print_stmt = "print" "(" lookup {"," lookup} ")" ;
 
@@ -79,13 +76,16 @@ lookup = var_name {"[" expression "]"} ;
 
 expression = number
            | ['#'] lookup
-	   | unary_op expression
-	   | expression binary_op expression
-	   | '(' expression ')' ;
+           | unary_op expression
+           | expression binary_op expression
+           | '(' expression ')' ;
 
 binary_op = "+" | "-" | "*" | "/" | "//" | "**" | "%" |
-            "^" | "|" | "&" | "<=" | ">=" | "!=" | "=" |
-	    "<" | ">" ;
+            "^" | "|" | "&" | "<=" | ">=" | "!=" | "==" |
+            "<" | ">" ;
+
+modification_op = "+=" | "-=" | "*=" | "/=" | "//=" | "**=" |
+                  "%=" | "^=" | "|=" | "&=" | "=" ;
 	    
 unary_op = "!" | "-" ;
 

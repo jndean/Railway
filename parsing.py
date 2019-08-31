@@ -4,7 +4,7 @@ from rply import ParserGenerator, Token
 
 import AST
 import interpreting
-from lexing import lexer, all_tokens
+from lexing import lexer
 
 
 # -------------------------- Exceptions -------------------------- #
@@ -12,6 +12,7 @@ from lexing import lexer, all_tokens
 class RailwaySyntaxError(RuntimeError): pass
 class RailwayIllegalMono(RailwaySyntaxError): pass
 class RailwaySelfmodification(RailwaySyntaxError): pass
+class RailwayNoninvertibleModification(RailwaySyntaxError): pass
 class RailwayBadSwitchMark(RailwaySyntaxError): pass
 class RailwayTypeError(RailwaySyntaxError): pass
 
@@ -22,7 +23,7 @@ class RailwayTypeError(RailwaySyntaxError): pass
 # a pure syntax tree or an interpreter tree (with eval methods) respectively
 def generate_parser(tree):
     pgen = ParserGenerator(
-        all_tokens,
+        [rule.name for rule in lexer.rules],
         precedence=[
             ('left', ['OR']),
             ('left', ['AND']),
@@ -157,12 +158,22 @@ def generate_parser(tree):
     @pgen.production('modification : lookup MODSUB expression')
     @pgen.production('modification : lookup MODMUL expression')
     @pgen.production('modification : lookup MODDIV expression')
+    @pgen.production('modification : lookup MODIDIV expression')
+    @pgen.production('modification : lookup MODPOW expression')
+    @pgen.production('modification : lookup MODMOD expression')
+    @pgen.production('modification : lookup MODXOR expression')
+    @pgen.production('modification : lookup MODOR expression')
+    @pgen.production('modification : lookup MODAND expression')
     def modification(p):
         lookup, op_token, expr = p
         op_name = op_token.gettokentype()
         op = tree.modops[op_name]
-        inv_op = tree.inv_modops[op_name]
         ismono = lookup.hasmono or expr.hasmono
+        if (not ismono) and op_name not in tree.inv_modops:
+            raise RailwayNoninvertibleModification(
+                f'Performing non-invertible operation {op_name} on non-mono '
+                f'variable "{lookup.name}')
+        inv_op = None if ismono else tree.inv_modops[op_name]
         modreverse = not lookup.mononame
         if ismono and modreverse:
             raise RailwayIllegalMono(

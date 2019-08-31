@@ -8,6 +8,9 @@ binops = dict((k, None) for k in [
 uniops = dict((k, None) for k in [
     'NOT', 'SUB'])
 modops = dict((k, None) for k in [
+    'MODADD', 'MODSUB', 'MODMUL', 'MODDIV', 'MODIDIV', 'MODPOW', 'MODMOD',
+    'MODXOR', 'MODOR', 'MODAND'])
+inv_modops = dict((k, None) for k in [
     'MODADD', 'MODSUB', 'MODMUL', 'MODDIV'])
 
 

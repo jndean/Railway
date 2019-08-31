@@ -1,19 +1,7 @@
 import sys
 from rply import LexerGenerator
 
-__all__ = ["lexer", "all_tokens"]
-
-all_tokens = [
-    "IMPORT", "AS", "GLOBAL", "FILE", "LET", "UNLET", 'FUNC',
-    'RETURN', 'PRINT', 'IF', 'FI', 'ELSE', 'LOOP', 'POOL',
-    'FOR', 'ROF', 'CALL', 'UNCALL', 'DO', 'UNDO', 'YIELD',
-    'SWAP', 'PUSH', 'POP', 'TRY', 'CATCH', 'YRT', 'IN', "LEQ", "GEQ",
-    "NEQ", "EQ", "LESS", "GREAT", "LRARROW", "RARROW",
-    "MODADD", "MODSUB", "MODMUL", "MODDIV", "ADD", "SUB",
-    "IDIV", "DIV", "MUL", "POW", "MOD", "XOR", "OR", "AND",
-    "LPAREN", "RPAREN", "LSQUARE", "RSQUARE", "LBRACK",
-    "RBRACK", "COMMA", "MONO", "LEN", "NOT", "SWITCH", "NUMBER",
-    "NAME", "STRING", "NEWLINE", "ASSIGN", "BORROWED"]
+__all__ = ["lexer"]
 
 lg = LexerGenerator()
 
@@ -59,6 +47,12 @@ lg.add("MODADD", r"\+\=")
 lg.add("MODSUB", r"\-\=")
 lg.add("MODMUL", r"\*\=")
 lg.add("MODDIV", r"\/\=")
+lg.add("MODIDIV", r"\/\/\=")
+lg.add("MODPOW", r"\*\*\=")
+lg.add("MODMOD", r"\%\=")
+lg.add("MODXOR", r"\^\=")
+lg.add("MODOR", r"\|\=")
+lg.add("MODAND", r"\&\=")
 lg.add("ASSIGN", r"\=")
 
 lg.add("ADD", r"\+")

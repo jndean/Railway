@@ -50,12 +50,14 @@ class Scope:
             scope=self)
 
     def assign(self, name, var):
-        namespace = self.monos if var.ismono else self.locals
-        if name in namespace:
-            raise RailwayVariableExists(
-                f'Variable "{name}" already exists',
-                scope=self)
-        namespace[name] = var
+        if var.ismono:
+            self.monos[name] = var
+        else:
+            if name in self.locals:
+                raise RailwayVariableExists(
+                    f'Variable "{name}" already exists',
+                    scope=self)
+            self.locals[name] = var
 
     def remove(self, name):
         if name in self.monos:
@@ -510,6 +512,18 @@ class Fraction(AST.Fraction):
 Parameter = AST.Parameter
 
 
+def __modop_mul(a, b):
+    if b == 0:
+        raise ZeroDivisionError()
+    return a * b
+
+
+def __modop_div(a, b):
+    if b == 0:
+        raise ZeroDivisionError()
+    return a / b
+
+
 binops = {'ADD': lambda a, b: a + b,
           'SUB': lambda a, b: a - b,
           'MUL': lambda a, b: a * b,
@@ -530,20 +544,16 @@ binops = {'ADD': lambda a, b: a + b,
 uniops = {'NOT': lambda x: not bool(x),
           'SUB': lambda x: -x}
 
-def __modop_mul(a, b):
-    if b == 0:
-        raise ZeroDivisionError()
-    return a * b
-
-def __modop_div(a, b):
-    if b == 0:
-        raise ZeroDivisionError()
-    return a * b
-
-modops = {'MODADD': lambda a, b: a + b,
-          'MODSUB': lambda a, b: a - b,
+modops = {'MODADD': binops['ADD'],
+          'MODSUB': binops['SUB'],
           'MODMUL': __modop_mul,
-          'MODDIV': __modop_div}
+          'MODDIV': __modop_div,
+          'MODIDIV': binops['IDIV'],
+          'MODPOW': binops['POW'],
+          'MODMOD': binops['MOD'],
+          'MODXOR': binops['XOR'],
+          'MODOR': binops['OR'],
+          'MODAND': binops['AND']}
 
 inv_modops = {'MODADD': modops['MODSUB'],
               'MODSUB': modops['MODADD'],
