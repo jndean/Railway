@@ -86,7 +86,7 @@ lg.add("NUMBER", r"\d+(\/\d+)?")
 lg.add("NAME", r"[a-zA-Z][a-zA-Z0-9_.]*")
 lg.add("STRING", r"\"[^\"]*\"")
 # lg.add("COMMENT", r"%[^%]*%")
-lg.add("NEWLINE", r"\n+")
+lg.add("NEWLINE", r"\n[ \t\r\f\v\n]*")
 
 # Escaped newlines
 lg.ignore(r"\\[ \t\r\f\v]*\n")

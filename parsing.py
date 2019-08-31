@@ -172,7 +172,7 @@ def generate_parser(tree):
         if (not ismono) and op_name not in tree.inv_modops:
             raise RailwayNoninvertibleModification(
                 f'Performing non-invertible operation {op_name} on non-mono '
-                f'variable "{lookup.name}')
+                f'variable "{lookup.name}"')
         inv_op = None if ismono else tree.inv_modops[op_name]
         modreverse = not lookup.mononame
         if ismono and modreverse:
@@ -232,7 +232,7 @@ def generate_parser(tree):
             p.pop(0)  # LPAREN
         t = p.pop(0)  # expression or RPAREN
         exit_expr = enter_expr if isinstance(t, Token) else t
-        ismono = enter_expr.has_mono or exit_expr.hasmono
+        ismono = enter_expr.hasmono or exit_expr.hasmono
         modreverse = any(i.modreverse for i in lines + else_lines)
         hasswitch = any(i.hasswitch for i in lines + else_lines)
         if ismono and modreverse:
@@ -422,7 +422,7 @@ def generate_parser(tree):
         if p[2].gettokentype() == 'for':
             pass"""
 
-    # -------------------- Build and Test -------------------- #
+    # -------------------- Build -------------------- #
 
     return pgen.build()
 

@@ -104,13 +104,7 @@ class Module(AST.Module):
             raise RailwayUndefinedFunction(
                 f'There is no main function in {self.name}', scope=None)
         main = self.functions.get('main', self.functions.get('~main', None))
-        try:
-            main.eval(scope, backwards=False)
-        except RailwayException as e:
-            print("\nError Call Stack:")
-            for frame in e.stack:
-                print('->', frame)
-            print(type(e).__name__, ':', e.message)
+        main.eval(scope, backwards=False)
 
 
 class Function(AST.Function):
