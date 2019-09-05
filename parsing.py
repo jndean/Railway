@@ -15,6 +15,8 @@ class RailwaySelfmodification(RailwaySyntaxError): pass
 class RailwayNoninvertibleModification(RailwaySyntaxError): pass
 class RailwayBadSwitchMark(RailwaySyntaxError): pass
 class RailwayTypeError(RailwaySyntaxError): pass
+class RailwayCircularDefinition(RailwaySyntaxError): pass
+class RailwayUnexpectedIndex(RailwaySyntaxError): pass
 
 
 # ------------------- main parser generation method ------------------- #
@@ -295,12 +297,11 @@ def generate_parser(tree):
         if (not src.mononame) and ismono:
             raise RailwayIllegalMono(
                 f'Pop modifies non-mono "{src.name}" using mono information')
-        return tree.Push(src_lookup=src, dst_lookup=dst, ismono=ismono,
-                         modreverse=modreverse, hasswitch=False)
+        return tree.Pop(src_lookup=src, dst_lookup=dst, ismono=ismono,
+                        modreverse=modreverse, hasswitch=False)
 
     # -------------------- let unlet -------------------- #
 
-    # #@pgen.production('let : LET lookup EQ arraygen')
     @pgen.production('let : LET lookup')
     @pgen.production('let : LET lookup ASSIGN expression')
     def let(p):
@@ -308,13 +309,18 @@ def generate_parser(tree):
         lookup = p[1]
         ismono = lookup.hasmono or rhs.hasmono
         modreverse = not lookup.mononame
+        if lookup.index:
+            raise RailwayUnexpectedIndex('Indices on LHS when initialising '
+                                         f'"{lookup.name}"')
         if (not lookup.mononame) and ismono:
             raise RailwayIllegalMono(f'Letting non-mono "{lookup.name}" '
                                      'using mono information')
+        if rhs.uses_var(lookup.name):
+            raise RailwayCircularDefinition(f'Variable "{lookup.name}" is used '
+                                            'during its own initialisation')
         return tree.Let(
             lookup, rhs, ismono=ismono, modreverse=modreverse, hasswitch=False)
 
-    # @pgen.production('unlet : UNLET lookup EQ arraygen')
     @pgen.production('unlet : UNLET lookup')
     @pgen.production('unlet : UNLET lookup ASSIGN expression')
     def unlet(p):
@@ -322,11 +328,61 @@ def generate_parser(tree):
         lookup = p[1]
         ismono = lookup.hasmono or rhs.hasmono
         modreverse = not lookup.mononame
+        if lookup.index:
+            raise RailwayUnexpectedIndex('Indices on LHS when unletting '
+                                         f'"{lookup.name}"')
         if (not lookup.mononame) and ismono:
             raise RailwayIllegalMono(f'Unletting "{lookup.name}" '
                                      'using mono information')
+        if rhs.uses_var(lookup.name):
+            raise RailwayCircularDefinition(f'Variable "{lookup.name}" is used '
+                                            'during its own unlet')
         return tree.Unlet(
             lookup, rhs, ismono=ismono, modreverse=modreverse, hasswitch=False)
+
+    # -------------------- Arrays -------------------- #
+
+    @pgen.production('expression : arrayliteral')
+    @pgen.production('expression : arrayrange')
+    @pgen.production('expression : arraytensor')
+    def expression_array(p):
+        return p[0]
+
+    @pgen.production('expression_list : expression')
+    @pgen.production('expression_list : expression COMMA expression_list')
+    def expression_list(p):
+        if len(p) == 1:
+            return [p[0]]
+        return [p[0]] + p[2]
+
+    @pgen.production('arrayliteral : LSQUARE expression_list RSQUARE')
+    def arrayliteral(p):
+        items = p[1]
+        hasmono = any(x.hasmono for x in items)
+        unowned = all(isinstance(x, tree.Fraction) or
+                      (hasattr(x, 'unowned') and x.unowned)
+                      for x in items)
+        return tree.ArrayLiteral(items, hasmono=hasmono, unowned=unowned)
+
+    @pgen.production('arrayrange : LSQUARE expression TO expression RSQUARE')
+    @pgen.production('arrayrange : LSQUARE expression TO expression BY'
+                     '             expression RSQUARE')
+    def arrayrange(p):
+        if len(p) == 5:
+            _, start, _, stop, _ = p
+            step = tree.Fraction(1)
+        else:
+            _, start, _, stop, _, step, _ = p
+        hasmono = start.hasmono or stop.hasmono or step.hasmono
+        return tree.ArrayRange(start, stop, step, hasmono=hasmono, unowned=True)
+
+    @pgen.production('arraytensor : LSQUARE expression '
+                     '             TENSOR expression RSQUARE')
+    def arraytensor(p):
+        _, fill_expr, _, dims_expr, _ = p
+        hasmono = fill_expr.hasmono or dims_expr.hasmono
+        return tree.ArrayTensor(fill_expr, dims_expr,
+                                hasmono=hasmono, unowned=True)
 
     # -------------------- expression -------------------- #
 
@@ -382,6 +438,10 @@ def generate_parser(tree):
         if isinstance(arg, tree.Fraction):
             return tree.Fraction(uniop(arg))
         return tree.Uniop(uniop, arg, name, hasmono=arg.hasmono)
+
+    # @pgen.production('expression : arrayliteral')
+    # def expression_arrayliteral(p):
+    #     return p[0]
 
     # -------------------- lookup -------------------- #
 

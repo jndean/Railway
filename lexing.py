@@ -33,6 +33,9 @@ lg.add('TRY', r"try")
 lg.add('CATCH', r"catch")
 lg.add('YRT', r"yrt")
 lg.add('IN', r"in")
+lg.add('TO', r"to")
+lg.add('BY', r"by")
+lg.add('TENSOR', r"tensor")
 
 lg.add("LEQ", r"\<\=")
 lg.add("GEQ", r"\>\=")
@@ -85,7 +88,6 @@ lg.add("SWITCH", r"~")
 lg.add("NUMBER", r"\d+(\/\d+)?")
 lg.add("NAME", r"[a-zA-Z][a-zA-Z0-9_.]*")
 lg.add("STRING", r"\"[^\"]*\"")
-# lg.add("COMMENT", r"%[^%]*%")
 lg.add("NEWLINE", r"\n[ \t\r\f\v\n]*")
 
 # Escaped newlines
@@ -93,7 +95,7 @@ lg.ignore(r"\\[ \t\r\f\v]*\n")
 # Whitespace
 lg.ignore(r"[ \t\r\f\v]+")
 # Comments
-lg.ignore(r"\$[^\n]*\n")
+lg.ignore(r"\$[^\n]*\n+")
 
 lexer = lg.build()
 

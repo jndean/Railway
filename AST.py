@@ -122,6 +122,48 @@ class Length(ExpressionNode):
         return condition(self) or self.lookup.search(condition)
 
 
+class ArrayLiteral(ExpressionNode):
+    __slots__ = ["items", "unowned"]
+
+    def __init__(self, items, unowned, **kwargs):
+        super().__init__(**kwargs)
+        self.items = items
+        self.unowned = unowned
+
+    def uses_var(self, name):
+        return any(x.uses_var(name) for x in self.items)
+
+
+class ArrayRange(ExpressionNode):
+    __slots__ = ["start", "stop", "step", "unowned"]
+
+    def __init__(self, start, stop, step, unowned, **kwargs):
+        super().__init__(**kwargs)
+        self.start = start
+        self.stop = stop
+        self.step = step
+        self.unowned = unowned
+
+    def uses_var(self, name):
+        return (self.start.uses_var(name)
+                or self.step.uses_var(name)
+                or self.stop.uses_var(name))
+
+
+class ArrayTensor(ExpressionNode):
+    __slots__ = ["fill_expr", "dims_expr", "unowned"]
+
+    def __init__(self, fill_expr, dims_expr, unowned, **kwargs):
+        super().__init__(**kwargs)
+        self.fill_expr = fill_expr
+        self.dims_expr = dims_expr
+        self.unowned = unowned
+
+    def uses_var(self, name):
+        return (self.dims_expr.uses_var(name)
+                or self.fill_expr.uses_var(name))
+
+
 class Let(StatementNode):
     __slots__ = ["lookup", "rhs"]
 

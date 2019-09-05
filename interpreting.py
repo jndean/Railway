@@ -1,3 +1,4 @@
+from copy import deepcopy
 from itertools import chain
 
 import AST
@@ -24,6 +25,7 @@ class RailwayFailedAssertion(RailwayException): pass
 class RailwayDirectionChange(RailwayException): pass
 class RailwayReferenceOwnership(RailwayException): pass
 class RailwayZeroError(RailwayException): pass
+class RailwayValueError(RailwayException): pass
 
 
 # -------------------- Interpreter-Only Objects ---------------------- #
@@ -337,25 +339,14 @@ class Unlet(AST.Unlet):
 
 def let_eval(self, scope):
     lhs, rhs = self.lookup, self.rhs
-    isarray = bool(lhs.index)
-    value = rhs.eval(scope=scope) if rhs is not None else Fraction(0)
-    if isarray:
-        lengths = [int(expr.eval(scope=scope)) for expr in lhs.index]
+    value = rhs.eval(scope=scope)
+    isarray = isinstance(value, list)
+    if isinstance(value, Fraction):
+        memory = [value]
+    elif hasattr(rhs, 'unowned') and rhs.unowned:
+        memory = value
     else:
-        lengths = [1]
-        if not isinstance(value, Fraction):
-            raise RailwayIndexError(
-                f'Cannot Let number "{lhs.name}" with array', scope=scope)
-    try:
-        memory = create_memory(lengths, value)
-    except TypeError:
-        raise RailwayIndexError('Encountered array when initialising '
-                                f'a numerical element of in "{lhs.name}"',
-                                scope=scope)
-    except IndexError:
-        raise RailwayIndexError(
-            f'Initilising "{lhs.name}" with an array of insufficient dimension',
-            scope=scope)
+        memory = deepcopy(value)
     var = Variable(memory=memory, ismono=lhs.mononame, isarray=isarray)
     scope.assign(name=lhs.name, var=var)
 
@@ -366,52 +357,74 @@ def unlet_eval(self, scope):
     if var.isborrowed:
         raise RailwayReferenceOwnership(
             f'Unletting borrowed reference "{lhs.name}"', scope=scope)
-    if var.isarray != bool(lhs.index):
-        raise RailwayTypeError(
-            f'Variable "{lhs.name}" is {"" if var.isarray else "not"} an '
-            f'array but Unlet has {"no" if var.isarray else""} indices',
-            scope=scope)
-    try:
-        if not self.ismono:
-            compare_memory(
-                var.memory if var.isarray else var.memory[0],
-                rhs.eval(scope=scope) if rhs is not None else Fraction(0))
-    except IndexError:
-        raise RailwayIndexError(f'Unletting variable "{lhs.name}" '
-                                'using expression of incorrect shape',
-                                scope=scope)
-    except ValueError:
-        raise RailwayIndexError(f'Value mismatch during Unlet of "{lhs.name}"',
-                                scope=scope)
+    if not self.ismono:
+        value = rhs.eval(scope=scope)
+        if var.isarray != isinstance(value, list):
+            t = ["number", "array"]
+            raise RailwayTypeError(f'Trying to unlet {t[var.isarray]} '
+                                   f'"{lhs.name}" using {t[not var.isarray]}',
+                                   scope=scope)
+        memory = value if isinstance(value, list) else [value]
+        if var.memory != memory:
+            raise RailwayValueError(f'Variable "{lhs.name}" does not match '
+                                    'RHS during uninitialisation', scope=scope)
     scope.remove(lhs.name)
 
 
-def create_memory(length_list, vals, depth=0):
-    if depth < len(length_list):
-        return [create_memory(length_list,
-                              vals[i] if isinstance(vals, list) else vals,
-                              depth+1)
-                for i in range(length_list[depth])]
-    if not isinstance(vals, Fraction):
-        raise TypeError("Raiway control flow: create memory")
-    return vals
+# -------------------- Arrays -------------------- #
+
+class ArrayLiteral(AST.ArrayLiteral):
+    def eval(self, scope):
+        return [item.eval(scope) for item in self.items]
 
 
-def compare_memory(memory, vals):
-    if isinstance(memory, list):
-        if isinstance(vals, Fraction):
-            for mem in memory:
-                compare_memory(mem, vals)
-        elif len(memory) != len(vals):
-            raise IndexError("Railway control flow: compare_memory")
+class ArrayRange(AST.ArrayRange):
+    def eval(self, scope):
+        val = self.start.eval(scope=scope)
+        step = self.step.eval(scope=scope)
+        stop = self.stop.eval(scope=scope)
+        out = []
+        while val < self.stop:
+            out.append(Fraction(val))
+            val += self.step
+        return out
+
+
+class ArrayTensor(AST.ArrayTensor):
+    def eval(self, scope):
+        dims = self.dims_expr.eval(scope=scope)
+        err_msg = None
+        if isinstance(dims, Fraction):
+            err_msg = 'Tensor dimensions should be an array, got a number'
+        elif not all(isinstance(x, Fraction) for x in dims):
+            err_msg = 'Tensor dimensions should be an array of numbers only'
+        elif not dims:
+            err_msg = 'Empty array given as tensor dimensions'
         else:
-            for mem, val in zip(memory, vals):
-                compare_memory(mem, val)
-    else:  # Otherwise fraction
-        if not isinstance(vals, Fraction):
-            raise IndexError("Railway control flow: compare_memory")
-        if vals != memory:
-            raise ValueError("Railway control flow: compare_memory")
+            dims = [int(d) for d in dims]
+            if not all(dims[:-1]):
+                err_msg = 'Only the final dimension of a tensor may be zero'
+            elif any(x < 0 for x in dims):
+                err_msg = 'Tensor dimensions must be non-negative'
+        if err_msg:
+            raise RailwayIndexError(err_msg, scope=scope)
+        fill = self.fill_expr.eval(scope=scope)
+        if isinstance(fill, Fraction):
+            return self._tensor_of_fill(dims, fill)
+        else:
+            return self._tensor_copy_fill(dims, fill)
+
+    def _tensor_of_fill(self, dims, fill, depth=0):
+        if depth < len(dims) - 1:
+            return [self._tensor_of_fill(dims, fill, depth+1)
+                    for _ in range(dims[depth])]
+        return [fill] * dims[-1]
+
+    def _tensor_copy_fill(self, dims, fill, depth=0):
+        if depth < len(dims) - 1:
+            return [self._tensor_copy_fill(dims, fill, depth+1)
+                    for _ in range(dims[depth])]
+        return [deepcopy(fill) for _ in range(dims[-1])]
 
 
 # -------------------- Expressions -------------------- #
