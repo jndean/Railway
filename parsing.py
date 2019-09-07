@@ -13,7 +13,6 @@ class RailwaySyntaxError(RuntimeError): pass
 class RailwayIllegalMono(RailwaySyntaxError): pass
 class RailwaySelfmodification(RailwaySyntaxError): pass
 class RailwayNoninvertibleModification(RailwaySyntaxError): pass
-class RailwayBadSwitchMark(RailwaySyntaxError): pass
 class RailwayTypeError(RailwaySyntaxError): pass
 class RailwayCircularDefinition(RailwaySyntaxError): pass
 class RailwayUnexpectedIndex(RailwaySyntaxError): pass
@@ -45,8 +44,8 @@ def generate_parser(tree):
         funcs = dict((fun.name, fun) for fun in p[0])
         return tree.Module(funcs)
 
-    @pgen.production('functions : func_decl')
-    @pgen.production('functions : func_decl functions')
+    @pgen.production('functions : function')
+    @pgen.production('functions : function functions')
     def functions(p):
         if len(p) == 1:
             return [p[0]]
@@ -54,58 +53,30 @@ def generate_parser(tree):
 
     # -------------------- func decl -------------------- #
 
-    @pgen.production('func_decl : FUNC funcname LPAREN parameters RPAREN'
-                     '            NEWLINE statements RETURN varname NEWLINE')
-    @pgen.production('func_decl : FUNC funcname LPAREN parameters RPAREN'
-                     '            NEWLINE statements RETURN NEWLINE')
-    @pgen.production('func_decl : FUNC funcname LPAREN RPAREN'
-                     '            NEWLINE statements RETURN varname NEWLINE')
-    @pgen.production('func_decl : FUNC funcname LPAREN RPAREN'
-                     '            NEWLINE statements RETURN NEWLINE')
-    def func_decl(p):
-        p.pop(0)  # FUNC
-        name = p.pop(0)  # funcname
-        p.pop(0)  # LPAREN
-        params = p.pop(0)  # parameters or RPAREN
-        if isinstance(params, list):
-            p.pop(0)  # RPAREN
-        else:
-            params = []
-        p.pop(0)  # NEWLINE
-        lines = p.pop(0)
-        p.pop(0)  # RETURN
-        retname = p.pop(0) if len(p) == 2 else None
-        hasswitch = any(i.hasswitch for i in lines)
-        if hasswitch and (name[0] != '~'):
-            raise RailwayBadSwitchMark(
-                f'Function "{name}" should be named "~{name}" since it uses '
-                'control structures which change the direction of time')
-        if not hasswitch and (name[0] == '~'):
-            raise RailwayBadSwitchMark(
-                f'Function "{name}" should not have a tilde since it contains '
-                'no control structures which change the direction of time')
-        modreverse = any(i.modreverse for i in lines)
-        return tree.Function(name=name,
-                             hasswitch=hasswitch,
-                             parameters=params,
-                             lines=lines,
-                             retname=retname,
-                             modreverse=modreverse)
+    @pgen.production('function : FUNC NAME parameters parameters NEWLINE'
+                     '            statements RETURN parameters NEWLINE')
+    def function(p):
+        _, name_t, borrowed_params, in_params, _, lines, _, out_params, _ = p
+        name = name_t.getstr()
+        modreverse = any(ln.modreverse for ln in lines)
+        return tree.Function(name, lines, modreverse, borrowed_params,
+                             in_params, out_params)
 
-    @pgen.production('parameters : parameter')
-    @pgen.production('parameters : parameter COMMA parameters')
+    @pgen.production('parameter_elts : parameter')
+    @pgen.production('parameter_elts : parameter COMMA parameter_elts')
+    @pgen.production('parameters : LPAREN RPAREN')
+    @pgen.production('parameters : LPAREN parameter_elts RPAREN')
     def parameters(p):
-        if len(p) == 1:
-            return [p[0]]
-        return [p[0]] + p[2]
+        if isinstance(p[0], Token):
+            return [] if isinstance(p[1], Token) else p[1]
+        return [p[0]] if isinstance(p[0], tree.Lookup) else [p[0]] + p[2]
 
-    @pgen.production('parameter : varname')
-    @pgen.production('parameter : BORROWED varname')
+    @pgen.production('parameter : lookup')
     def parameter(p):
-        name = p[-1]
-        ismono = (name[0] == '.')
-        isborrowed = (len(p) == 2)
-        return tree.Parameter(name, isborrowed, ismono)
+        if p[0].index:
+            raise RailwayUnexpectedIndex(f'Function parameter "{p[0].name}" '
+                                         f'has indices')
+        return p[0]
 
     # -------------------- statements -------------------- #
 
@@ -141,7 +112,7 @@ def generate_parser(tree):
         do_lines = p[2]
         yield_lines = p[5]
         modreverse = any(i.modreverse for i in do_lines + yield_lines)
-        return tree.DoUndo(do_lines, yield_lines, hasswitch=True,
+        return tree.DoUndo(do_lines, yield_lines,
                            ismono=False, modreverse=modreverse)
 
     # -------------------- print -------------------- #
@@ -152,7 +123,7 @@ def generate_parser(tree):
         target = p[1]
         ismono = (not isinstance(target, str)) and target.hasmono
         return tree.Print(
-            target, ismono=ismono, modreverse=False, hasswitch=False)
+            target, ismono=ismono, modreverse=False)
 
     # -------------------- modification -------------------- #
 
@@ -186,7 +157,7 @@ def generate_parser(tree):
             raise RailwaySelfmodification(
                 f'Statement uses "{lookup.name}" to modify itself')
         return tree.Modop(lookup, op, inv_op, expr, op_name, ismono=ismono,
-                          modreverse=modreverse, hasswitch=False)
+                          modreverse=modreverse)
 
     # -------------------- loop -------------------- #
 
@@ -206,13 +177,11 @@ def generate_parser(tree):
             raise RailwaySyntaxError('A loop should have a reverse condition '
                                      'if and only if it is bi-directional')
         modreverse = any(i.modreverse for i in lines)
-        hasswitch = any(i.hasswitch for i in lines)
         if ismono and modreverse:
             raise RailwayIllegalMono('Loop condition uses mono information '
                                      'and the body modifies a non-mono var')
-        return tree.Loop(
-            forward_condition, lines, backward_condition, ismono=ismono,
-            hasswitch=hasswitch, modreverse=modreverse)
+        return tree.Loop(forward_condition, lines, backward_condition,
+                         ismono=ismono, modreverse=modreverse)
 
     # -------------------- if -------------------- #
 
@@ -243,14 +212,12 @@ def generate_parser(tree):
             raise RailwaySyntaxError('Provided a reverse condition for a mono-'
                                      'directional if-statement')
         modreverse = any(i.modreverse for i in lines + else_lines)
-        hasswitch = any(i.hasswitch for i in lines + else_lines)
         if ismono and modreverse:
             raise RailwayIllegalMono(
                 'Using mono information in a branch condition which affects a '
                 'non-mono variable')
-        return tree.If(
-            enter_expr, lines, else_lines, exit_expr, ismono=ismono,
-            modreverse=modreverse, hasswitch=hasswitch)
+        return tree.If(enter_expr, lines, else_lines, exit_expr,
+                       ismono=ismono, modreverse=modreverse)
 
     # -------------------- push pop swap -------------------- #
 
@@ -276,7 +243,7 @@ def generate_parser(tree):
             raise RailwayIllegalMono(
                 f'Pushing non-mono "{src.name}" using mono information')
         return tree.Push(src_lookup=src, dst_lookup=dst, ismono=ismono,
-                         modreverse=modreverse, hasswitch=False)
+                         modreverse=modreverse)
 
     @pgen.production('pop : POP lookup RARROW lookup')
     @pgen.production('pop : POP lookup LEQ lookup')
@@ -298,7 +265,7 @@ def generate_parser(tree):
             raise RailwayIllegalMono(
                 f'Pop modifies non-mono "{src.name}" using mono information')
         return tree.Pop(src_lookup=src, dst_lookup=dst, ismono=ismono,
-                        modreverse=modreverse, hasswitch=False)
+                        modreverse=modreverse)
 
     # -------------------- let unlet -------------------- #
 
@@ -318,8 +285,7 @@ def generate_parser(tree):
         if rhs.uses_var(lookup.name):
             raise RailwayCircularDefinition(f'Variable "{lookup.name}" is used '
                                             'during its own initialisation')
-        return tree.Let(
-            lookup, rhs, ismono=ismono, modreverse=modreverse, hasswitch=False)
+        return tree.Let(lookup, rhs, ismono=ismono, modreverse=modreverse)
 
     @pgen.production('unlet : UNLET lookup')
     @pgen.production('unlet : UNLET lookup ASSIGN expression')
@@ -338,7 +304,7 @@ def generate_parser(tree):
             raise RailwayCircularDefinition(f'Variable "{lookup.name}" is used '
                                             'during its own unlet')
         return tree.Unlet(
-            lookup, rhs, ismono=ismono, modreverse=modreverse, hasswitch=False)
+            lookup, rhs, ismono=ismono, modreverse=modreverse)
 
     # -------------------- Arrays -------------------- #
 
@@ -466,8 +432,6 @@ def generate_parser(tree):
 
     @pgen.production('varname : NAME')
     @pgen.production('varname : MONO NAME')
-    @pgen.production('funcname : NAME')
-    @pgen.production('funcname : SWITCH NAME')
     def varfuncname_name(p):
         return ''.join(x.getstr() for x in p)
 

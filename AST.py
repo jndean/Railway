@@ -26,12 +26,11 @@ class ExpressionNode(ABC):
 
 
 class StatementNode(ABC):
-    __slots__ = ["ismono", "modreverse", "hasswitch"]
+    __slots__ = ["ismono", "modreverse"]
 
-    def __init__(self, ismono, modreverse, hasswitch):
+    def __init__(self, ismono, modreverse):
         self.ismono = ismono  # Node is only executed forward
         self.modreverse = modreverse  # (Sub)Node modifies a non-mono var
-        self.hasswitch = hasswitch  # (Sub)Node switches direction of time
 
 
 class Fraction(BuiltinFraction):
@@ -103,9 +102,6 @@ class Parameter:
         self.name = name
         self.mononame = mononame
         self.isborrowed = isborrowed
-
-    def search(self, condition):
-        return condition(self)
 
 
 class Length(ExpressionNode):
@@ -306,21 +302,25 @@ class Print(StatementNode):
 
 
 class Function:
-    __slots__ = ["name", "hasswitch", "parameters", "lines", "retname",
-                 "modreverse"]
+    __slots__ = ["name", "lines", "modreverse",
+                 "borrowed_params", "borrowed_signature", "borrowed_names",
+                 "in_params", "in_signature", "in_names",
+                 "out_params", "out_signature", "out_names"]
 
-    def __init__(self, name, hasswitch, parameters, lines, retname, modreverse):
+    def __init__(self, name, lines, modreverse, borrowed_params, in_params,
+                 out_params):
         self.name = name
-        self.hasswitch = hasswitch
-        self.parameters = parameters
         self.lines = lines
-        self.retname = retname
         self.modreverse = modreverse
-
-    def search(self, condition):
-        return (condition(self)
-                or any(x.search(condition) for x in self.parameters)
-                or any(x.search(condition) for x in self.lines))
+        self.borrowed_params = borrowed_params
+        self.borrowed_signature = [p.mononame for p in borrowed_params]
+        self.borrowed_names = set(p.name for p in borrowed_params)
+        self.in_params = in_params
+        self.in_signature = [p.mononame for p in in_params]
+        self.in_names = set(p.name for p in in_params + borrowed_params)
+        self.out_params = out_params
+        self.out_signature = [p.mononame for p in out_params]
+        self.out_names = set(p.name for p in out_params + borrowed_params)
 
 
 class Module:

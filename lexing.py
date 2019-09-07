@@ -8,7 +8,6 @@ lg = LexerGenerator()
 lg.add("IMPORT", r"import")
 lg.add("AS", r"as")
 lg.add("GLOBAL", r"global")
-lg.add("FILE", r"file")
 lg.add("LET", r"let")
 lg.add("UNLET", r"unlet")
 lg.add('FUNC', r"func")
@@ -80,10 +79,8 @@ lg.add("COMMA", r"\,")
 
 # Symbols with special meaning
 lg.add("MONO", r"\.")
-lg.add("BORROWED", r"\@")
 lg.add("LEN", r"#")
 lg.add("NOT", r"!")
-lg.add("SWITCH", r"~")
 
 lg.add("NUMBER", r"\d+(\/\d+)?")
 lg.add("NAME", r"[a-zA-Z][a-zA-Z0-9_.]*")

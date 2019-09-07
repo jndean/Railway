@@ -111,35 +111,20 @@ class Module(AST.Module):
 
 class Function(AST.Function):
     def eval(self, scope, backwards):
-        lines = reversed(self.lines) if backwards else self.lines
+        if backwards:
+            lines, out_names = reversed(self.lines), self.in_names
+            out_params = self.in_params
+        else:
+            lines, out_names = self.lines, self.out_names
+            out_params = self.out_params
         for line in lines:
             line.eval(scope, backwards=backwards)
-        if backwards:
-            param_names = set(p.name for p in self.parameters)
-            reversible_names = set(scope.locals)
-            existing_names = reversible_names.union(set(scope.monos))
-            leaked = reversible_names.difference(param_names)
-            missing = param_names.difference(existing_names)
-            if leaked:
-                raise RailwayLeakedInformation(
-                        f'Variable "{leaked.pop()}" is still in scope of '
-                        f'function {self.name} at the end of an uncall',
-                        scope=scope)
-            if missing:
-                raise RailwayUndefinedVariable(
-                    f'Parameter "{missing.pop()}" is not in scope of function '
-                    f'{self.name} at the end of an uncall',
-                    scope=scope)
-            return_names = [p.name for p in self.parameters if not p.isborrowed]
-        else:
-            for name, var in scope.locals.items():
-                if (not var.isborrowed) and name != self.retname:
-                    raise RailwayLeakedInformation(
-                        f'Variable "{name}" is still in scope of function '
-                        f'{self.name} at the end of a call',
-                        scope=scope)
-            return_names = [] if self.retname is None else [self.retname]
-        return [scope.lookup(nm, globals=False) for nm in return_names]
+        leaks = set(scope.locals).difference(out_names)
+        if leaks:
+            raise RailwayLeakedInformation(
+                f'Variable "{leaks.pop()}" is still in scope of '
+                f'function {self.name} at the end of a (un)call', scope=scope)
+        return [scope.lookup(x.name, globals=False) for x in out_params]
 
 
 # -------------------- AST - Print --------------------#

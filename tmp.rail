@@ -1,36 +1,7 @@
-func oldmain()
-
-  let i = 0
-  let array[10000000] = 0
-
-  loop (i < 10000000)
-    array[i] += i
-    i += 1
-  pool (i > 0)
-
-  print "Done"
-  unlet i = 10000000
-
-return array
-
-func main ()
-  let y = 4 % 8
-  let array[5] = 6 / y
-  print array
-  do
-    let i = 0
-    loop (i < 5)
-      i += 1
-    pool (i > 0)
-    unlet i = 5
-  yield
-    print "Done"
-  undo
-  print !#array-1
-  unlet array[5] = 6 / y
-return y
-
-
-func argmax(X)
-  let best = 0
-return best
+func main(argv)()
+  let x = 4
+  let y = [1,2,3]
+  push x => y
+  print y
+  unlet y = [1,2,3,4]
+return ()

@@ -1,55 +1,51 @@
 
-module = {import} {global} {file} {func_decl} ;
+module = {import} {global} {function} ;
 
 import = "import" string ["as" [name]] ;
 global = "global" lookup "=" expression ;
-file = "file" name "=" string ;
 
-func_decl = "func" func_name "(" [parameter]  {","  parameter} ")" "\n"
-            {statement}
-            "return" [lookup] "\n" ;
+function = "func" name "(" [var_name {","  var_name}] ")"
+                       "(" [var_name {","  var_name}] ")" "\n"
+           {statement}
+           "return" "(" [var_name {","  var_name}] ")" ;
 
 statement = [let_stmt | unlet_stmt | if_stmt | loop_stmt | for_stmt |
              push_stmt | pop_stmt | swap_stmt | do_stmt | mod_stmt |
-	     try_stmt | catch_stmt | call_stmt | uncall_stmt | print_stmt]
-	     "\n" ;
+             try_stmt | catch_stmt | call_stmt | print_stmt]
+             "\n" ;
 
 let_stmt = "let" lookup "=" expression ;
 
 unlet_stmt = "unlet" lookup "=" expression ;
 
-push_stmt = "push" (lookup "=>" lookup) |
-	    	   (lookup "<=" lookup) ;
+push_stmt = "push" (lookup "=>" lookup) | (lookup "<=" lookup) ;
 
-pop_stmt = "pop" (lookup "<=" lookup) |
-    	   (lookup "=>" lookup) ;
+pop_stmt = "pop" (lookup "<=" lookup) | (lookup "=>" lookup) ;
 
 swap_stmt = "swap" lookup "<=>" lookup ;
 
 if_stmt = "if" "(" expression ")" "\n"
-          {statement}
-	  ["else" "\n" {statement}]
-	  "fi" ["(" expression ")"] ;
+           {statement}
+           ["else" "\n" {statement}]
+           "fi" ["(" expression ")"] ;
 
 loop_stmt = "loop" "(" expression ")" "\n"
             {statement}
-	    "pool" "(" expression ")" ;
+            "pool" "(" expression ")" ;
 
 for_stmt = "for" "(" var_name "=" expression ")" "\n"
             {statement}
-	    "rof" "(" var_name "=" expression ")" ;
+            "rof" "(" var_name "=" expression ")" ;
 
 do_stmt = "do" "\n"
           {statement}
-	  "yield" "\n"
-	  {yieldable_stmt}
-	  "undo" ;
-
-yieldable_statement = [let_stmt | unlet_stmt | print_stmt] "\n" ;
+          "yield" "\n"
+          {yieldable_stmt}
+          "undo" ;
 
 try_stmt = "try" "(" name "in" expression ")" "\n"
            {statement}
-	   "yrt" ;
+           "yrt" ;
 
 catch_stmt = "catch" "(" expression ")" ;
 
@@ -57,20 +53,21 @@ mod_stmt = lookup modification_op expression ;
 
 print_stmt = "print" "(" lookup {"," lookup} ")" ;
 
-call_stmt = "call" [variable "=" ] func_name ["{" expression "}"]
-             "(" [parameter] {',' parameter} ")" ;
-	     
-uncall_stmt = "uncall" [variable "=" ] func_name ["{" expression "}"]
-               "(" [parameter] {',' parameter} ")" ;
+call_block = ("call" | "uncall") name ["{" expression "}"]
+             "(" var_name {"," var_name} ")" ;
+call_chain_right = call_block {"=>" call_block} ;
+call_chain_left  = call_block {"<=" call_block} ;
+call_stmt = ["(" var_name {"," var_name} ")" "=>"] call_chain_right
+                ["=>" "(" var_name {"," var_name} ")"]
+          | ["(" var_name {"," var_name} ")" "<="] call_chain_left
+                ["<=" "(" var_name {"," var_name} ")"] ;
 
 array_generator = "[" expression "for" name "in" expression "]"
-                  | "[" expression "to" expression [ "by" expression ] "]" ;
+                | "[" expression "to" expression [ "by" expression ] "]" ;
 
 array_literal = "[" [expression] {"," expression} "]" ;
 
 array_tensor = "[" expression "tensor" expression "]" ;
-
-parameter = ["@"] var_name ;
 
 lookup = var_name {"[" expression "]"} ;
 
@@ -91,8 +88,6 @@ modification_op = "+=" | "-=" | "*=" | "/=" | "//=" | "**=" |
                   "%=" | "^=" | "|=" | "&=" | "=" ;
 	    
 unary_op = "!" | "-" ;
-
-func_name = ['~'] name ;
 
 var_name = ['.'] name ;
 
