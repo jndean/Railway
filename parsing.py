@@ -1,30 +1,37 @@
+from collections import namedtuple, defaultdict
 import sys
 
 from rply import ParserGenerator, Token
 
 import AST
 import interpreting
-from lexing import lexer
+import lexing
 
+__all__ = ["generate_parsing_function"]
+
+
+ParserState = namedtuple('ParserState', ['filename', 'parser'])
 
 # -------------------------- Exceptions -------------------------- #
 
 class RailwaySyntaxError(RuntimeError): pass
 class RailwayIllegalMono(RailwaySyntaxError): pass
-class RailwaySelfmodification(RailwaySyntaxError): pass
+class RailwayExpectedMono(RailwaySyntaxError): pass
+class RailwaySelfmodificfation(RailwaySyntaxError): pass
 class RailwayNoninvertibleModification(RailwaySyntaxError): pass
 class RailwayTypeError(RailwaySyntaxError): pass
 class RailwayCircularDefinition(RailwaySyntaxError): pass
 class RailwayUnexpectedIndex(RailwaySyntaxError): pass
+class RailwayDuplicateDefinition(RailwaySyntaxError): pass
 
 
 # ------------------- main parser generation method ------------------- #
 
 # tree can be either the AST module or the interpreter module, creating
 # a pure syntax tree or an interpreter tree (with eval methods) respectively
-def generate_parser(tree):
+def generate_parsing_function(tree):
     pgen = ParserGenerator(
-        [rule.name for rule in lexer.rules],
+        [rule.name for rule in lexing.lexer.rules],
         precedence=[
             ('left', ['OR']),
             ('left', ['AND']),
@@ -37,28 +44,41 @@ def generate_parser(tree):
         ]
     )
 
-    # -------------------- func decl -------------------- #
+    # -------------------- Module definitions -------------------- #
 
     @pgen.production('module : functions')
-    def module(p):
-        funcs = dict((fun.name, fun) for fun in p[0])
+    def module(state, p):
+        extern_funcs = {}  # Temporary
+        funcs = {}
+        for func in p[0]:
+            if func.name in extern_funcs or func.name in funcs:
+                raise RailwayDuplicateDefinition(
+                    f'Function {func.name} has multiple definitions')
+            funcs[func.name] = func
         return tree.Module(funcs)
 
     @pgen.production('functions : function')
     @pgen.production('functions : function functions')
-    def functions(p):
+    def functions(state, p):
         if len(p) == 1:
             return [p[0]]
         return [p[0]] + p[1]
 
-    # -------------------- func decl -------------------- #
+    # -------------------- function declaration -------------------- #
 
-    @pgen.production('function : FUNC NAME parameters parameters NEWLINE'
-                     '            statements RETURN parameters NEWLINE')
-    def function(p):
-        _, name_t, borrowed_params, in_params, _, lines, _, out_params, _ = p
-        name = name_t.getstr()
+    @pgen.production('function : FUNC name parameters parameters NEWLINE'
+                     '           statements RETURN parameters NEWLINE')
+    def function(state, p):
+        _, name, borrowed_params, in_params, _, lines, _, out_params, _ = p
         modreverse = any(ln.modreverse for ln in lines)
+        if modreverse == (name[0] == '.'):
+            if modreverse:
+                raise RailwayIllegalMono(f'Function "{name}" is marked as mono'
+                                         ' but modifies non-mono variables')
+            else:
+                raise RailwayExpectedMono(f'Function "{name}" modifies no non-'
+                                          'mono variables, so should be marked'
+                                          'as mono')
         return tree.Function(name, lines, modreverse, borrowed_params,
                              in_params, out_params)
 
@@ -66,23 +86,93 @@ def generate_parser(tree):
     @pgen.production('parameter_elts : parameter COMMA parameter_elts')
     @pgen.production('parameters : LPAREN RPAREN')
     @pgen.production('parameters : LPAREN parameter_elts RPAREN')
-    def parameters(p):
+    def parameters(state, p):
         if isinstance(p[0], Token):
             return [] if isinstance(p[1], Token) else p[1]
         return [p[0]] if isinstance(p[0], tree.Lookup) else [p[0]] + p[2]
 
     @pgen.production('parameter : lookup')
-    def parameter(p):
+    def parameter(state, p):
         if p[0].index:
             raise RailwayUnexpectedIndex(f'Function parameter "{p[0].name}" '
                                          f'has indices')
         return p[0]
 
+    # -------------------- function call/uncall -------------------- #
+
+    @pgen.production('callblock : CALL name parameters')
+    @pgen.production('callblock : UNCALL name parameters')
+    @pgen.production('callblock : CALL name LBRACK RBRACK parameters')
+    @pgen.production('callblock : UNCALL name LBRACK expression RBRACK'
+                     '            parameters')
+    def callblock(state, p):
+        isuncall = (p[0].gettokentype() == 'UNCALL')
+        name = p[1]
+        borrowed_params = p[-1]
+        numthreads = p[3] if len(p) == 6 else tree.Fraction(1)
+        return tree.CallBlock(isuncall, name, numthreads, borrowed_params)
+
+    @pgen.production('callchain_right : callblock')
+    @pgen.production('callchain_right : callblock RARROW callchain_right')
+    @pgen.production('callchain_left  : callblock')
+    @pgen.production('callchain_left  : callblock LEQ callchain_left')
+    def callchain(state, p):
+        # The returned list if always left to right,
+        # regardless of chain direction
+        if len(p) == 1:
+            return [p[0]]
+        elif p[1].gettokentype() == 'RARROW':
+            return [p[0]] + p[2]
+        else:
+            return p[2] + [p[0]]
+
+    # No params
+    @pgen.production('call_stmt : callchain_right')
+    # Params on the left
+    @pgen.production('call_stmt : LPAREN parameters RPAREN RARROW '
+                     '            callchain_right')
+    @pgen.production('call_stmt : LPAREN parameters RPAREN LEQ '
+                     '            callchain_left')
+    # Params on the left and right
+    @pgen.production('call_stmt : LPAREN parameters RPAREN RARROW '
+                     '            callchain_right'
+                     '            RARROW LPAREN parameters RPAREN')
+    @pgen.production('call_stmt : LPAREN parameters RPAREN LEQ '
+                     '            callchain_left'
+                     '            LEQ LPAREN parameters RPAREN')
+    # Params on the right
+    @pgen.production('call_stmt : callchain_right'
+                     '            RARROW LPAREN parameters RPAREN')
+    @pgen.production('call_stmt : callchain_left'
+                     '            LEQ LPAREN parameters RPAREN')
+    def callfunc(state, p):
+        if len(p) == 1:  # No params
+            in_params, calls, out_params = [], p[0], []
+        else:
+            in_params, out_params = [], []
+            if isinstance(p[0], Token):  # Params on the left
+                calls = p[4]
+                if p[3].gettokentype() == 'RARROW':
+                    in_params = p[1]
+                else:
+                    out_params = p[1]
+            else:
+                calls = p[0]
+            if isinstance(p[-1], Token):  # Params on the right
+                if p[-4].gettokentype() == 'RARROW':
+                    out_params = p[-2]
+                else:
+                    in_params = p[-2]
+        modreverse = any(call.name[0] == '.' for call in calls)
+        ismono = not modreverse
+        return tree.CallFunc(in_params, calls, out_params,
+                             modreverse=modreverse, ismono=ismono)
+
     # -------------------- statements -------------------- #
 
     @pgen.production('statements : statement')
     @pgen.production('statements : statement statements')
-    def statements(p):
+    def statements(state, p):
         if not p:
             return []
         if len(p) == 1:
@@ -99,7 +189,7 @@ def generate_parser(tree):
     @pgen.production('stmt : do')
     @pgen.production('stmt : print')
     @pgen.production('statement : stmt NEWLINE')
-    def statement(p):
+    def statement(state, p):
         return p[0]
 
     # -------------------- do-yield-undo -------------------- #
@@ -108,7 +198,7 @@ def generate_parser(tree):
                      '      statements'
                      '     YIELD NEWLINE'
                      '      statements UNDO')
-    def do_yield_undo(p):
+    def do_yield_undo(state, p):
         do_lines = p[2]
         yield_lines = p[5]
         modreverse = any(i.modreverse for i in do_lines + yield_lines)
@@ -119,7 +209,7 @@ def generate_parser(tree):
 
     @pgen.production('print : PRINT expression')
     @pgen.production('print : PRINT string')
-    def print_expression(p):
+    def print_expression(state, p):
         target = p[1]
         ismono = (not isinstance(target, str)) and target.hasmono
         return tree.Print(
@@ -137,7 +227,7 @@ def generate_parser(tree):
     @pgen.production('modification : lookup MODXOR expression')
     @pgen.production('modification : lookup MODOR expression')
     @pgen.production('modification : lookup MODAND expression')
-    def modification(p):
+    def modification(state, p):
         lookup, op_token, expr = p
         op_name = op_token.gettokentype()
         op = tree.modops[op_name]
@@ -167,7 +257,7 @@ def generate_parser(tree):
     @pgen.production('loop : LOOP LPAREN expression RPAREN NEWLINE'
                      '         statements'
                      '       POOL LPAREN RPAREN')
-    def loop(p):
+    def loop(state, p):
         forward_condition = p[2]
         lines = p[5]
         backward_condition = None if (len(p) == 9) else p[8]
@@ -199,7 +289,7 @@ def generate_parser(tree):
                      '     statements'
                      '     ELSE NEWLINE statements'
                      '     FI LPAREN RPAREN')
-    def _if(p):
+    def _if(state, p):
         _, _, enter_expr, _, _, lines, *p = p
         if p[0].gettokentype() == 'ELSE':
             _, _, else_lines, _, _, *p = p
@@ -223,7 +313,7 @@ def generate_parser(tree):
 
     @pgen.production('push : PUSH lookup RARROW lookup')
     @pgen.production('push : PUSH lookup LEQ lookup')
-    def push(p):
+    def push(state, p):
         _, lhs, arrow, rhs = p
         ismono = lhs.hasmono or rhs.hasmono
         modreverse = (not lhs.mononame) or (not rhs.mononame)
@@ -247,7 +337,7 @@ def generate_parser(tree):
 
     @pgen.production('pop : POP lookup RARROW lookup')
     @pgen.production('pop : POP lookup LEQ lookup')
-    def pop(p):
+    def pop(state, p):
         _, lhs, arrow, rhs = p
         ismono = lhs.hasmono or rhs.hasmono
         modreverse = (not lhs.mononame) or (not rhs.mononame)
@@ -271,7 +361,7 @@ def generate_parser(tree):
 
     @pgen.production('let : LET lookup')
     @pgen.production('let : LET lookup ASSIGN expression')
-    def let(p):
+    def let(state, p):
         rhs = tree.Fraction(0) if len(p) == 2 else p[3]
         lookup = p[1]
         ismono = lookup.hasmono or rhs.hasmono
@@ -289,7 +379,7 @@ def generate_parser(tree):
 
     @pgen.production('unlet : UNLET lookup')
     @pgen.production('unlet : UNLET lookup ASSIGN expression')
-    def unlet(p):
+    def unlet(state, p):
         rhs = tree.Fraction(0) if len(p) == 2 else p[3]
         lookup = p[1]
         ismono = lookup.hasmono or rhs.hasmono
@@ -311,19 +401,20 @@ def generate_parser(tree):
     @pgen.production('expression : arrayliteral')
     @pgen.production('expression : arrayrange')
     @pgen.production('expression : arraytensor')
-    def expression_array(p):
+    def expression_array(state, p):
         return p[0]
 
     @pgen.production('expression_list : expression')
     @pgen.production('expression_list : expression COMMA expression_list')
-    def expression_list(p):
+    def expression_list(state, p):
         if len(p) == 1:
             return [p[0]]
         return [p[0]] + p[2]
 
+    @pgen.production('arrayliteral : LSQUARE RSQUARE')
     @pgen.production('arrayliteral : LSQUARE expression_list RSQUARE')
-    def arrayliteral(p):
-        items = p[1]
+    def arrayliteral(state, p):
+        items = p[1] if len(p) == 3 else []
         hasmono = any(x.hasmono for x in items)
         unowned = all(isinstance(x, tree.Fraction) or
                       (hasattr(x, 'unowned') and x.unowned)
@@ -333,7 +424,7 @@ def generate_parser(tree):
     @pgen.production('arrayrange : LSQUARE expression TO expression RSQUARE')
     @pgen.production('arrayrange : LSQUARE expression TO expression BY'
                      '             expression RSQUARE')
-    def arrayrange(p):
+    def arrayrange(state, p):
         if len(p) == 5:
             _, start, _, stop, _ = p
             step = tree.Fraction(1)
@@ -344,7 +435,7 @@ def generate_parser(tree):
 
     @pgen.production('arraytensor : LSQUARE expression '
                      '             TENSOR expression RSQUARE')
-    def arraytensor(p):
+    def arraytensor(state, p):
         _, fill_expr, _, dims_expr, _ = p
         hasmono = fill_expr.hasmono or dims_expr.hasmono
         return tree.ArrayTensor(fill_expr, dims_expr,
@@ -353,7 +444,7 @@ def generate_parser(tree):
     # -------------------- expression -------------------- #
 
     @pgen.production('expression : NUMBER')
-    def expression_number(p):
+    def expression_number(state, p):
         return tree.Fraction(p[0].getstr())
 
     @pgen.production('expression : expression ADD expression')
@@ -372,7 +463,7 @@ def generate_parser(tree):
     @pgen.production('expression : expression EQ expression')
     @pgen.production('expression : expression LESS expression')
     @pgen.production('expression : expression GREAT expression')
-    def expression_binop(p):
+    def expression_binop(state, p):
         lhs, op_token, rhs = p
         name = op_token.gettokentype()
         binop = tree.binops[name]
@@ -383,12 +474,12 @@ def generate_parser(tree):
         return tree.Binop(lhs, binop, rhs, name, hasmono=hasmono)
 
     @pgen.production('expression : LPAREN expression RPAREN')
-    def expression_parentheses(p):
+    def expression_parentheses(state, p):
         return p[1]
 
     @pgen.production('expression : lookup')
     @pgen.production('expression : LEN lookup')
-    def expression_lookup(p):
+    def expression_lookup(state, p):
         lookup = p.pop()
         if p:
             return tree.Length(lookup, hasmono=lookup.hasmono)
@@ -396,7 +487,7 @@ def generate_parser(tree):
 
     @pgen.production('expression : NOT expression')
     @pgen.production('expression : SUB expression', precedence='NEG')
-    def expression_uniop(p):
+    def expression_uniop(state, p):
         op_token, arg = p
         name = op_token.gettokentype()
         uniop = tree.uniops[name]
@@ -406,14 +497,14 @@ def generate_parser(tree):
         return tree.Uniop(uniop, arg, name, hasmono=arg.hasmono)
 
     # @pgen.production('expression : arrayliteral')
-    # def expression_arrayliteral(p):
+    # def expression_arrayliteral(state, p):
     #     return p[0]
 
     # -------------------- lookup -------------------- #
 
-    @pgen.production('lookup : varname')
-    @pgen.production('lookup : varname index')
-    def lookup_varname(p):
+    @pgen.production('lookup : name')
+    @pgen.production('lookup : name index')
+    def lookup_varname(state, p):
         name = p.pop(0)
         index = p.pop() if p else tuple()
         mononame = (name[0] == '.')
@@ -423,42 +514,30 @@ def generate_parser(tree):
 
     @pgen.production('index : LSQUARE expression RSQUARE')
     @pgen.production('index : LSQUARE expression RSQUARE index')
-    def index_expression(p):
+    def index_expression(state, p):
         if len(p) == 4:
             return (p[1],) + p[3]
         return p[1],
 
     # -------------------- names -------------------- #
 
-    @pgen.production('varname : NAME')
-    @pgen.production('varname : MONO NAME')
-    def varfuncname_name(p):
+    @pgen.production('name : NAME')
+    @pgen.production('name : MONO NAME')
+    def varfuncname_name(state, p):
         return ''.join(x.getstr() for x in p)
 
     # -------------------- string -------------------- #
 
     @pgen.production('string : STRING')
-    def string_string(p):
+    def string_string(state, p):
         return p[0].getstr()[1:-1]
 
-    # -------------------- arraygen -------------------- #
-    """
-    @pgen.production('arraygen : LSQUARE expression FOR NAME IN arraygen
-     RSQUARE')
-    @pgen.production('arraygen : LSQUARE expression RSQUARE')
-    @pgen.production('arraygen : LSQUARE expression COMMA expression RSQUARE')
-    @pgen.production('arraygen : LSQUARE expression COMMA expression COMMA '
-                     'expression RSQUARE')
-    def arraygen(p):
-        if p[2].gettokentype() == 'for':
-            pass"""
+    # ------------- Generate final parsing method --------------- #
 
-    # -------------------- Build -------------------- #
+    _parser = pgen.build()
 
-    return pgen.build()
+    def parse(tokens, filename):
+        state = ParserState(filename=filename, parser=_parser)
+        return _parser.parse(tokens, state=state)
 
-
-if __name__ == "__main__":
-    parser = generate_parser(tree=interpreting)
-    with open(sys.argv[1], 'r') as f:
-        AST.display(parser.parse(lexer.lex(f.read())))
+    return parse

@@ -1,7 +1,11 @@
-func main(argv)()
-  let x = 4
-  let y = [1,2,3]
-  push x => y
-  print y
-  unlet y = [1,2,3,4]
+func .main(argv)()
+  let .raw = [1,1,1,1,5,5,5,7,7,7,7,8,9,9,9,3,3,3]
+  let .compressed = []
+  
+  loop (#.raw)
+    pop .tmp <= .raw
+    print .tmp
+    push .tmp => .compressed
+  pool ()
+  print .compressed
 return ()

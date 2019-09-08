@@ -4,10 +4,10 @@ module = {import} {global} {function} ;
 import = "import" string ["as" [name]] ;
 global = "global" lookup "=" expression ;
 
-function = "func" name "(" [var_name {","  var_name}] ")"
-                       "(" [var_name {","  var_name}] ")" "\n"
+function = "func" name "(" [name {","  name}] ")"
+                       "(" [name {","  name}] ")" "\n"
            {statement}
-           "return" "(" [var_name {","  var_name}] ")" ;
+           "return" "(" [name {","  name}] ")" ;
 
 statement = [let_stmt | unlet_stmt | if_stmt | loop_stmt | for_stmt |
              push_stmt | pop_stmt | swap_stmt | do_stmt | mod_stmt |
@@ -33,9 +33,9 @@ loop_stmt = "loop" "(" expression ")" "\n"
             {statement}
             "pool" "(" expression ")" ;
 
-for_stmt = "for" "(" var_name "=" expression ")" "\n"
+for_stmt = "for" "(" name "in" expression ")" "\n"
             {statement}
-            "rof" "(" var_name "=" expression ")" ;
+            "rof" "(" name "in" expression ")" ;
 
 do_stmt = "do" "\n"
           {statement}
@@ -43,7 +43,7 @@ do_stmt = "do" "\n"
           {yieldable_stmt}
           "undo" ;
 
-try_stmt = "try" "(" name "in" expression ")" "\n"
+try_stmt = "try" "(" basic_name "in" expression ")" "\n"
            {statement}
            "yrt" ;
 
@@ -54,22 +54,22 @@ mod_stmt = lookup modification_op expression ;
 print_stmt = "print" "(" lookup {"," lookup} ")" ;
 
 call_block = ("call" | "uncall") name ["{" expression "}"]
-             "(" var_name {"," var_name} ")" ;
+             "(" name {"," name} ")" ;
 call_chain_right = call_block {"=>" call_block} ;
 call_chain_left  = call_block {"<=" call_block} ;
-call_stmt = ["(" var_name {"," var_name} ")" "=>"] call_chain_right
-                ["=>" "(" var_name {"," var_name} ")"]
-          | ["(" var_name {"," var_name} ")" "<="] call_chain_left
-                ["<=" "(" var_name {"," var_name} ")"] ;
+call_stmt = ["(" name {"," name} ")" "=>"] call_chain_right
+                ["=>" "(" name {"," name} ")"]
+          | ["(" name {"," name} ")" "<="] call_chain_left
+                ["<=" "(" name {"," name} ")"] ;
 
 array_generator = "[" expression "for" name "in" expression "]"
                 | "[" expression "to" expression [ "by" expression ] "]" ;
 
-array_literal = "[" [expression] {"," expression} "]" ;
+array_literal = "[" [expression {"," expression}] "]" ;
 
 array_tensor = "[" expression "tensor" expression "]" ;
 
-lookup = var_name {"[" expression "]"} ;
+lookup = name {"[" expression "]"} ;
 
 expression = number
            | ['#'] lookup
@@ -89,9 +89,9 @@ modification_op = "+=" | "-=" | "*=" | "/=" | "//=" | "**=" |
 	    
 unary_op = "!" | "-" ;
 
-var_name = ['.'] name ;
+name = ['.'] basic_name ;
 
-name = "[a-zA-Z_][a-zA-Z0-9_.]*" ;
+basic_name = "[a-zA-Z_][a-zA-Z0-9_.]*" ;
 
 string = "\"[^\"]*\"" ;
 

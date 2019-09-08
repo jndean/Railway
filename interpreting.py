@@ -96,18 +96,20 @@ class VariableMutator:
         self.memory[self.index] = value
 
 
-# -------------------- AST - Top Level Objects --------------------#
+# ------------------------- AST Objects --------------------------#
 
 class Module(AST.Module):
     def eval(self):
         scope = Scope(parent=None, name='main',
                       locals={}, monos={}, globals={})
-        if 'main' not in self.functions and '~main' not in self.functions:
+        if 'main' not in self.functions and '.main' not in self.functions:
             raise RailwayUndefinedFunction(
                 f'There is no main function in {self.name}', scope=None)
-        main = self.functions.get('main', self.functions.get('~main', None))
+        main = self.functions.get('main', self.functions.get('.main', None))
         main.eval(scope, backwards=False)
 
+
+# ---------------- AST - Function bodies and calls ----------------#
 
 class Function(AST.Function):
     def eval(self, scope, backwards):
@@ -126,6 +128,10 @@ class Function(AST.Function):
                 f'function {self.name} at the end of a (un)call', scope=scope)
         return [scope.lookup(x.name, globals=False) for x in out_params]
 
+
+class CallFunc(AST.CallFunc):
+    def eval(self, scope, backwards):
+        raise NotImplementedError
 
 # -------------------- AST - Print --------------------#
 

@@ -3,19 +3,21 @@ import sys
 import rply
 
 import interpreting
-import lexing
-import parsing
+from lexing import lexer
+from parsing import generate_parsing_function, RailwaySyntaxError
 
 
 if __name__ == '__main__':
+
     filename = sys.argv[1]
     with open(filename, 'r') as f:
         source = f.read()
-    tokens = lexing.lexer.lex(source)
-    parser = parsing.generate_parser(tree=interpreting)
+    tokens = lexer.lex(source)
+    parse = generate_parsing_function(tree=interpreting)
+
     try:
-        program = parser.parse(tokens)
-    except parsing.RailwaySyntaxError as e:
+        program = parse(tokens, filename)
+    except RailwaySyntaxError as e:
         sys.exit('\nSyntax Error of type ' +
                  type(e).__name__ + ':\n' +
                  e.args[0])
@@ -25,6 +27,7 @@ if __name__ == '__main__':
         sys.exit(f'\nParsing Error\n File: {filename}\n Line: {lineno}\n\n' +
                  source.splitlines()[lineno-1] + '\n' +
                  marker)
+
     try:
         program.eval()
     except interpreting.RailwayException as e:

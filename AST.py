@@ -301,6 +301,26 @@ class Print(StatementNode):
         return condition(self)
 
 
+class CallBlock:
+    __slots__ = ["isuncall", "name", "numthreads", "borrowed_params"]
+
+    def __init__(self, isuncall, name, numthreads, borrowed_params):
+        self.isuncall = isuncall
+        self.name = name
+        self.numthreads = numthreads
+        self.borrowed_params = borrowed_params
+
+
+class CallFunc(StatementNode):
+    __slots__ = ["in_params", "calls", "out_params"]
+
+    def __init__(self, in_params, calls, out_params, **kwargs):
+        super().__init__(**kwargs)
+        self.in_params = in_params
+        self.calls = calls
+        self.out_params = out_params
+
+
 class Function:
     __slots__ = ["name", "lines", "modreverse",
                  "borrowed_params", "borrowed_signature", "borrowed_names",
@@ -333,17 +353,6 @@ class Module:
     def search(self, condition):
         return (condition(self)
                 or any(x.search(condition) for x in self.functions))
-
-
-"""class ArrayGen():
-    __slots__ = ["start_expr", "end_expr", "step_expr",
-                 "subarray", "name", "expr"]
-
-    def __init__(self, start_expr=None, end_expr=None, step_expr=None,
-                 subarray=None, name=None, expr=None):
-        self.generator = generator
-        def gen(name, expr)
-"""
 
 
 def display(node, indent=0):
