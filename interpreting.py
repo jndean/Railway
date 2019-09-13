@@ -349,6 +349,26 @@ def pop_eval(scope, src_lookup, dst_lookup):
     scope.assign(name=dst_lookup.name, var=var)
 
 
+# ----------------------- AST - Promote -----------------------#
+
+class Promote(AST.Promote):
+    def eval(self, scope, backwards):
+        if backwards:
+            if scope.lookup(self.dst_name).isborrowed:
+                raise RailwayReferenceOwnership(
+                    'Unpromoting a borrowed reference to '
+                    f'"{self.dst_name}"', scope=scope)
+            scope.remove(self.dst_name)
+        else:
+            var = scope.lookup(self.src_name, globals=False)
+            if var.isborrowed:
+                raise RailwayReferenceOwnership('Promoting borrowed reference '
+                                                f'to "{self.src_name}"', scope)
+            scope.remove(self.src_name)
+            var.ismono = False
+            scope.assign(self.dst_name, var)
+
+
 # -------------------- AST - Modifications --------------------#
 
 class Modop(AST.Modop):

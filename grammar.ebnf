@@ -11,7 +11,7 @@ function = "func" name "(" [name {","  name}] ")"
 
 statement = [let_stmt | unlet_stmt | if_stmt | loop_stmt | for_stmt |
              push_stmt | pop_stmt | swap_stmt | do_stmt | mod_stmt |
-             try_stmt | catch_stmt | call_stmt | print_stmt]
+             try_stmt | catch_stmt | call_stmt | print_stmt | promote_stmt]
              "\n" ;
 
 let_stmt = "let" lookup "=" expression ;
@@ -46,6 +46,8 @@ do_stmt = "do" "\n"
 try_stmt = "try" "(" basic_name "in" expression ")" "\n"
            {statement}
            "yrt" ;
+
+promote_stmt = "promote" name ;
 
 catch_stmt = "catch" "(" expression ")" ;
 

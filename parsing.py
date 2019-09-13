@@ -182,6 +182,7 @@ def generate_parsing_function(tree):
     @pgen.production('stmt : pop')
     @pgen.production('stmt : do')
     @pgen.production('stmt : call_stmt')
+    @pgen.production('stmt : promote')
     @pgen.production('stmt : print')
     @pgen.production('statement : stmt NEWLINE')
     def statement(state, p):
@@ -351,6 +352,27 @@ def generate_parsing_function(tree):
                 f'Pop modifies non-mono "{src.name}" using mono information')
         return tree.Pop(src_lookup=src, dst_lookup=dst, ismono=ismono,
                         modreverse=modreverse)
+
+    # --------------------- promote --------------------- #
+
+    @pgen.production('promote : PROMOTE lookup RARROW lookup')
+    @pgen.production('promote : PROMOTE lookup LEQ lookup')
+    def promote(state, p):
+        if p[2].gettokentype() == 'RARROW':
+            src, dst = p[1], p[3]
+        else:
+            src, dst = p[3], p[1]
+        if not src.mononame:
+            raise RailwayExpectedMono(
+                f'Promoting non-mono variable "{src.name}"')
+        if dst.mononame:
+            raise RailwayIllegalMono(f'Promoting to mono variable "{dst.name}"')
+        for lookup in (src, dst):
+            if lookup.index:
+                raise RailwayUnexpectedIndex(
+                    f'Indexing into "{lookup.name}" in promote statement')
+        return tree.Promote(src_name=src.name, dst_name=dst.name,
+                            modreverse=True, ismono=False)
 
     # -------------------- let unlet -------------------- #
 
