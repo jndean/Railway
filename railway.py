@@ -11,7 +11,7 @@ if __name__ == '__main__':
 
     filename = sys.argv[1]
     with open(filename, 'r') as f:
-        source = f.read()
+        source = f.read() + '\n'
     tokens = lexer.lex(source)
     parse = generate_parsing_function(tree=interpreting)
 
@@ -22,11 +22,14 @@ if __name__ == '__main__':
                  type(e).__name__ + ':\n' +
                  e.args[0])
     except rply.ParsingError as e:
-        lineno = e.getsourcepos().lineno
-        marker = ' ' * (e.getsourcepos().colno - 1) + '^'
-        sys.exit(f'\nParsing Error\n File: {filename}\n Line: {lineno}\n\n' +
-                 source.splitlines()[lineno-1] + '\n' +
-                 marker)
+        sourcepos = e.getsourcepos()
+        if sourcepos is not None:
+            lineno = e.getsourcepos().lineno
+            marker = ' ' * (e.getsourcepos().colno - 1) + '^'
+            sys.exit(f'\nParsing Error\n File: {filename}\n Line: {lineno}\n\n' +
+                     source.splitlines()[lineno-1] + '\n' +
+                     marker)
+        sys.exit(f'Parsing error {e}')
 
     try:
         program.eval()

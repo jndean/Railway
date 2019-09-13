@@ -311,7 +311,7 @@ class CallBlock:
         self.borrowed_params = borrowed_params
 
 
-class CallFunc(StatementNode):
+class CallChain(StatementNode):
     __slots__ = ["in_params", "calls", "out_params"]
 
     def __init__(self, in_params, calls, out_params, **kwargs):
@@ -323,9 +323,9 @@ class CallFunc(StatementNode):
 
 class Function:
     __slots__ = ["name", "lines", "modreverse",
-                 "borrowed_params", "borrowed_signature", "borrowed_names",
-                 "in_params", "in_signature", "in_names",
-                 "out_params", "out_signature", "out_names"]
+                 "borrowed_params", "borrowed_names",
+                 "in_params", "in_names",
+                 "out_params", "out_names"]
 
     def __init__(self, name, lines, modreverse, borrowed_params, in_params,
                  out_params):
@@ -333,13 +333,10 @@ class Function:
         self.lines = lines
         self.modreverse = modreverse
         self.borrowed_params = borrowed_params
-        self.borrowed_signature = [p.mononame for p in borrowed_params]
         self.borrowed_names = set(p.name for p in borrowed_params)
         self.in_params = in_params
-        self.in_signature = [p.mononame for p in in_params]
         self.in_names = set(p.name for p in in_params + borrowed_params)
         self.out_params = out_params
-        self.out_signature = [p.mononame for p in out_params]
         self.out_names = set(p.name for p in out_params + borrowed_params)
 
 

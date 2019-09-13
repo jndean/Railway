@@ -1,0 +1,29 @@
+func main(argv)()
+    do
+        let data = [0,0,0,3,3,3,3,3,3,3,5,5,5,0,0,0]
+        (data) => call compress() => (compressed)
+    yield
+        print compressed
+    undo
+return ()
+
+
+func compress()(data)
+  let output = []
+
+  loop (#data)
+    pop current_sym <= data
+    let count = 1
+
+    loop(#data & (data[-1] == current_sym))
+        pop tmp <= data
+        unlet tmp = current_sym
+        count += 1
+     pool(count > 1)
+
+    push count => output
+    push current_sym => output
+  pool(#output)
+
+  unlet data = []
+return (output)

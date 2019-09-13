@@ -17,7 +17,7 @@ ParserState = namedtuple('ParserState', ['filename', 'parser'])
 class RailwaySyntaxError(RuntimeError): pass
 class RailwayIllegalMono(RailwaySyntaxError): pass
 class RailwayExpectedMono(RailwaySyntaxError): pass
-class RailwaySelfmodificfation(RailwaySyntaxError): pass
+class RailwaySelfmodification(RailwaySyntaxError): pass
 class RailwayNoninvertibleModification(RailwaySyntaxError): pass
 class RailwayTypeError(RailwaySyntaxError): pass
 class RailwayCircularDefinition(RailwaySyntaxError): pass
@@ -78,7 +78,7 @@ def generate_parsing_function(tree):
             else:
                 raise RailwayExpectedMono(f'Function "{name}" modifies no non-'
                                           'mono variables, so should be marked'
-                                          'as mono')
+                                          ' as mono')
         return tree.Function(name, lines, modreverse, borrowed_params,
                              in_params, out_params)
 
@@ -89,7 +89,7 @@ def generate_parsing_function(tree):
     def parameters(state, p):
         if isinstance(p[0], Token):
             return [] if isinstance(p[1], Token) else p[1]
-        return [p[0]] if isinstance(p[0], tree.Lookup) else [p[0]] + p[2]
+        return [p[0]] if len(p) == 1 else [p[0]] + p[2]
 
     @pgen.production('parameter : lookup')
     def parameter(state, p):
@@ -113,15 +113,15 @@ def generate_parsing_function(tree):
         return tree.CallBlock(isuncall, name, numthreads, borrowed_params)
 
     @pgen.production('callchain_right : callblock')
-    @pgen.production('callchain_right : callblock RARROW callchain_right')
+    @pgen.production('callchain_right : callblock GREAT callchain_right')
     @pgen.production('callchain_left  : callblock')
-    @pgen.production('callchain_left  : callblock LEQ callchain_left')
+    @pgen.production('callchain_left  : callblock LESS callchain_left')
     def callchain(state, p):
         # The returned list if always left to right,
         # regardless of chain direction
         if len(p) == 1:
             return [p[0]]
-        elif p[1].gettokentype() == 'RARROW':
+        elif p[1].gettokentype() == 'GREAT':
             return [p[0]] + p[2]
         else:
             return p[2] + [p[0]]
@@ -129,44 +129,38 @@ def generate_parsing_function(tree):
     # No params
     @pgen.production('call_stmt : callchain_right')
     # Params on the left
-    @pgen.production('call_stmt : LPAREN parameters RPAREN RARROW '
-                     '            callchain_right')
-    @pgen.production('call_stmt : LPAREN parameters RPAREN LEQ '
-                     '            callchain_left')
+    @pgen.production('call_stmt : parameters RARROW callchain_right')
+    @pgen.production('call_stmt : parameters LEQ callchain_left')
     # Params on the left and right
-    @pgen.production('call_stmt : LPAREN parameters RPAREN RARROW '
-                     '            callchain_right'
-                     '            RARROW LPAREN parameters RPAREN')
-    @pgen.production('call_stmt : LPAREN parameters RPAREN LEQ '
-                     '            callchain_left'
-                     '            LEQ LPAREN parameters RPAREN')
+    @pgen.production('call_stmt : parameters RARROW callchain_right'
+                     '            RARROW parameters')
+    @pgen.production('call_stmt : parameters LEQ callchain_left'
+                     '            LEQ parameters')
     # Params on the right
-    @pgen.production('call_stmt : callchain_right'
-                     '            RARROW LPAREN parameters RPAREN')
-    @pgen.production('call_stmt : callchain_left'
-                     '            LEQ LPAREN parameters RPAREN')
+    @pgen.production('call_stmt : callchain_right RARROW parameters')
+    @pgen.production('call_stmt : callchain_left LEQ parameters')
     def callfunc(state, p):
         if len(p) == 1:  # No params
             in_params, calls, out_params = [], p[0], []
         else:
             in_params, out_params = [], []
-            if isinstance(p[0], Token):  # Params on the left
-                calls = p[4]
-                if p[3].gettokentype() == 'RARROW':
-                    in_params = p[1]
+            if isinstance(p[2][0], tree.CallBlock):  # Params on the left
+                calls = p[2]
+                if p[1].gettokentype() == 'RARROW':
+                    in_params = p[0]
                 else:
-                    out_params = p[1]
+                    out_params = p[0]
             else:
                 calls = p[0]
-            if isinstance(p[-1], Token):  # Params on the right
-                if p[-4].gettokentype() == 'RARROW':
-                    out_params = p[-2]
+            if isinstance(p[-3][0], tree.CallBlock):  # Params on the right
+                if p[-2].gettokentype() == 'RARROW':
+                    out_params = p[-1]
                 else:
-                    in_params = p[-2]
-        modreverse = any(call.name[0] == '.' for call in calls)
+                    in_params = p[-1]
+        modreverse = any(call.name[0] != '.' for call in calls)
         ismono = not modreverse
-        return tree.CallFunc(in_params, calls, out_params,
-                             modreverse=modreverse, ismono=ismono)
+        return tree.CallChain(in_params, calls, out_params,
+                              modreverse=modreverse, ismono=ismono)
 
     # -------------------- statements -------------------- #
 
@@ -187,6 +181,7 @@ def generate_parsing_function(tree):
     @pgen.production('stmt : push')
     @pgen.production('stmt : pop')
     @pgen.production('stmt : do')
+    @pgen.production('stmt : call_stmt')
     @pgen.production('stmt : print')
     @pgen.production('statement : stmt NEWLINE')
     def statement(state, p):
@@ -471,7 +466,14 @@ def generate_parsing_function(tree):
         # Compile-time constant computation #
         if isinstance(lhs, tree.Fraction) and isinstance(rhs, tree.Fraction):
             return tree.Fraction(binop(lhs, rhs))
-        return tree.Binop(lhs, binop, rhs, name, hasmono=hasmono)
+        node = tree.Binop(lhs, binop, rhs, name, hasmono=hasmono)
+        # Special eval methods for binops that can short-circuit
+        if tree is interpreting:
+            if name == 'AND':
+                node.eval = node.eval_and
+            elif name == 'OR':
+                node.eval = node.eval_or
+        return node
 
     @pgen.production('expression : LPAREN expression RPAREN')
     def expression_parentheses(state, p):

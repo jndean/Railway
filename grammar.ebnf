@@ -55,8 +55,8 @@ print_stmt = "print" "(" lookup {"," lookup} ")" ;
 
 call_block = ("call" | "uncall") name ["{" expression "}"]
              "(" name {"," name} ")" ;
-call_chain_right = call_block {"=>" call_block} ;
-call_chain_left  = call_block {"<=" call_block} ;
+call_chain_right = call_block {">" call_block} ;
+call_chain_left  = call_block {"<" call_block} ;
 call_stmt = ["(" name {"," name} ")" "=>"] call_chain_right
                 ["=>" "(" name {"," name} ")"]
           | ["(" name {"," name} ")" "<="] call_chain_left

@@ -1,5 +1,4 @@
 from copy import deepcopy
-from itertools import chain
 
 import AST
 
@@ -26,16 +25,20 @@ class RailwayDirectionChange(RailwayException): pass
 class RailwayReferenceOwnership(RailwayException): pass
 class RailwayZeroError(RailwayException): pass
 class RailwayValueError(RailwayException): pass
+class RailwayCallError(RailwayException): pass
+class RailwayIllegalMono(RailwayException): pass
+class RailwayExpectedMono(RailwayException): pass
 
 
 # -------------------- Interpreter-Only Objects ---------------------- #
 
 class Scope:
-    __slots__ = ['parent', 'name', 'locals', 'monos', 'globals']
+    __slots__ = ['parent', 'name', 'functions', 'locals', 'monos', 'globals']
 
-    def __init__(self, parent, name, locals, monos, globals):
+    def __init__(self, parent, name, locals, monos, globals, functions):
         self.parent = parent
         self.name = name
+        self.functions = functions
         self.locals = locals if locals is not None else {}
         self.monos = monos if monos is not None else {}
         self.globals = globals if globals is not None else {}
@@ -71,6 +74,12 @@ class Scope:
                 f'Local variable "{name}" does not exist',
                 scope=self)
 
+    def lookup_func(self, name):
+        if name not in self.functions:
+            raise RailwayUndefinedFunction(f'Function "{name}" does not exist',
+                                           scope=self)
+        return self.functions[name]
+
 
 class Variable:
     __slots__ = ['memory', 'ismono', 'isborrowed', 'isarray']
@@ -82,25 +91,11 @@ class Variable:
         self.isarray = isarray
 
 
-class VariableMutator:
-    __slots__ = ['memory', 'index']
-
-    def __init__(self, memory, index):
-        self.memory = memory
-        self.index = index
-
-    def get(self):
-        return self.memory[self.index]
-
-    def set(self, value):
-        self.memory[self.index] = value
-
-
 # ------------------------- AST Objects --------------------------#
 
 class Module(AST.Module):
     def eval(self):
-        scope = Scope(parent=None, name='main',
+        scope = Scope(parent=None, name='main', functions=self.functions,
                       locals={}, monos={}, globals={})
         if 'main' not in self.functions and '.main' not in self.functions:
             raise RailwayUndefinedFunction(
@@ -125,13 +120,78 @@ class Function(AST.Function):
         if leaks:
             raise RailwayLeakedInformation(
                 f'Variable "{leaks.pop()}" is still in scope of '
-                f'function {self.name} at the end of a (un)call', scope=scope)
+                f'function "{self.name}" at the end of a (un)call', scope=scope)
         return [scope.lookup(x.name, globals=False) for x in out_params]
 
 
-class CallFunc(AST.CallFunc):
+class CallChain(AST.CallChain):
     def eval(self, scope, backwards):
-        raise NotImplementedError
+        if backwards and self.ismono:
+            return
+        params = self.out_params if backwards else self.in_params
+        variables = [scope.lookup(p.name, globals=False) for p in params]
+        for var, p in zip(variables, params):
+            if var.isborrowed:
+                raise RailwayReferenceOwnership(
+                    f'Variable "{p.name}" is a borrowed reference and so may '
+                    f'not be stolen by function "{self.calls[0].name}"',
+                    scope=scope)
+            scope.remove(p.name)
+        for call in reversed(self.calls) if backwards else self.calls:
+            variables = _eval_call(call, backwards, variables, scope)
+        params = self.in_params if backwards else self.out_params
+        if len(params) != len(variables):
+            raise RailwayLeakedInformation(
+                f'Function "{call.name}" returned {len(variables)} variables '
+                f'but the result is assigned to {len(params)} variables', scope)
+        for var, param in zip(variables, params):
+            _check_mono_match(
+                var, param, call.isuncall ^ backwards, call.name, scope)
+            scope.assign(param.name, var)
+
+
+def _eval_call(call, backwards, variables, scope):
+    function = scope.lookup_func(call.name)
+    uncall = call.isuncall ^ backwards
+    params = function.out_params if uncall else function.in_params
+    subscope = Scope(parent=scope,
+                     name=call.name,
+                     functions=scope.functions,
+                     locals={}, monos={}, globals=scope.globals)
+    if len(variables) != len(params):
+        raise RailwayCallError(
+            f'{"Unc" if uncall else "C"}alling function "{call.name}" with '
+            f'{len(variables)} stolen references when it expects '
+            f'{len(params)}', scope=scope)
+    else:
+        for var, param in zip(variables, params):
+            _check_mono_match(var, param, uncall, call.name, scope)
+            subscope.assign(param.name, var)
+    for call_param, func_param in zip(call.borrowed_params,
+                                      function.borrowed_params):
+        var = scope.lookup(call_param.name)
+        _check_mono_match(var, func_param, uncall, call.name, scope)
+        new_var = Variable(memory=var.memory, ismono=var.ismono,
+                           isborrowed=True, isarray=var.isarray)
+        subscope.assign(func_param.name, new_var)
+    return function.eval(scope=subscope, backwards=uncall)
+
+
+def _check_mono_match(variable, parameter, isuncall, fname, scope):
+    if variable.ismono and not parameter.mononame:
+        callstr = 'Uncalling' if isuncall else 'Calling'
+        raise RailwayIllegalMono(
+            f'{callstr} function "{fname}" using mono argument for non-mono'
+            f' parameter "{parameter.name}"', scope=scope)
+    if parameter.mononame and not variable.ismono:
+        callstr = 'Uncalling' if isuncall else 'Calling'
+        raise RailwayIllegalMono(
+            f'{callstr} function "{fname}" using non-mono argument for '
+            f'mono parameter "{parameter.name}"', scope=scope)
+
+
+CallBlock = AST.CallBlock
+
 
 # -------------------- AST - Print --------------------#
 
@@ -429,6 +489,18 @@ class Binop(AST.Binop):
                 f'Binary operation {self.name} does not accept arrays',
                 scope=scope)
         return Fraction(self.op(lhs, rhs))
+
+    def eval_and(self, scope):
+        lhs = self.lhs.eval(scope=scope)
+        if not lhs:
+            return Fraction(0)
+        return Fraction(bool(self.rhs.eval(scope=scope)))
+
+    def eval_or(self, scope):
+        lhs = self.lhs.eval(scope=scope)
+        if lhs:
+            return Fraction(1)
+        return Fraction(bool(self.rhs.eval(scope=scope)))
 
 
 class Uniop(AST.Uniop):
