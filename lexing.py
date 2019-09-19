@@ -7,7 +7,6 @@ lg = LexerGenerator()
 
 lg.add("IMPORT", r"import")
 lg.add("AS", r"as")
-lg.add("GLOBAL", r"global")
 lg.add("LET", r"let")
 lg.add("UNLET", r"unlet")
 lg.add('FUNC', r"func")
