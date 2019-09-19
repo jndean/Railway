@@ -177,6 +177,7 @@ def generate_parsing_function(tree):
     @pgen.production('stmt : unlet')
     @pgen.production('stmt : if')
     @pgen.production('stmt : loop')
+    @pgen.production('stmt : for')
     @pgen.production('stmt : modification')
     @pgen.production('stmt : push')
     @pgen.production('stmt : pop')
@@ -244,6 +245,26 @@ def generate_parsing_function(tree):
                 f'Statement uses "{lookup.name}" to modify itself')
         return tree.Modop(lookup, op, inv_op, expr, op_name, ismono=ismono,
                           modreverse=modreverse)
+
+    # -------------------- for -------------------- #
+
+    @pgen.production('for : FOR LPAREN parameter IN expression RPAREN NEWLINE'
+                     '         statements ROF')
+    def _for(state, p):
+        lookup, iterator, lines = p[2], p[4], p[7]
+        modreverse = any(ln.modreverse for ln in lines)
+        if iterator.hasmono and not lookup.mononame:
+            raise RailwayIllegalMono(
+                f'For loop uses non-mono name "{lookup.name}" for elements in a'
+                ' mono iterator')
+        # Using a mono varname and non-mono iterator needn't be mono
+        ismono = iterator.hasmono
+        if ismono and modreverse:
+            raise RailwayIllegalMono('For loop is mono-directional but modifies'
+                                     ' non-mono variables')
+        return tree.For(lookup=lookup, iterator=iterator, lines=lines,
+                        ismono=ismono, modreverse=modreverse)
+
 
     # -------------------- loop -------------------- #
 

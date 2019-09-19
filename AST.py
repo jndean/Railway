@@ -285,6 +285,16 @@ class Loop(StatementNode):
                 or any(x.search(condition) for x in self.lines))
 
 
+class For(StatementNode):
+    __slots__ = ["lookup", "iterator", "lines"]
+
+    def __init__(self, lookup, iterator, lines, **kwargs):
+        super().__init__(**kwargs)
+        self.lookup = lookup
+        self.iterator = iterator
+        self.lines = lines
+
+
 class DoUndo(StatementNode):
     __slots__ = ["do_lines", "yield_lines"]
 

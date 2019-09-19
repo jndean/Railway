@@ -198,7 +198,7 @@ CallBlock = AST.CallBlock
 class Print(AST.Print):
     def eval(self, scope, backwards=False):
         if backwards:
-            return
+            pass#return
         if isinstance(self.target, str):
             print(self.target)
         else:
@@ -235,6 +235,44 @@ class DoUndo(AST.DoUndo):
                 scope=scope)
         for line in reversed(self.do_lines):
             line.eval(scope, backwards=True)
+
+
+# -------------------- AST - For --------------------#
+
+class For(AST.For):
+    def eval(self, scope, backwards):
+        if hasattr(self.iterator, 'lazy_eval'):
+            memory = self.iterator.lazy_eval(scope, backwards)
+        else:
+            memory = self.iterator.eval(scope)
+        lines = self.lines[::-1] if backwards else self.lines
+        name = self.lookup.name
+        i = len(memory)-1 if backwards else 0
+        while True:
+            elt = memory[i]
+            backup = elt
+            if not isinstance(elt, Fraction):
+                raise RailwayTypeError('Assigning an array to for-loop '
+                                       f'variable "{name}"', scope=scope)
+            var = Variable(memory=[elt], ismono=self.lookup.mononame,
+                           isborrowed=True, isarray=False)
+            scope.assign(name, var)
+            for line in lines:
+                line.eval(scope, backwards)
+            if var.memory[0] != memory[i]:
+                raise RailwayValueError(
+                    f'For loop variable "{name}" has value {var.memory[0]} '
+                    f'after an iteration, but the source array has '
+                    f'corresponding value {memory[i]}', scope=scope)
+            scope.remove(name)
+            if backwards:
+                i -= 1
+                if i < 0:
+                    break
+            else:
+                i += 1
+                if i >= len(memory):
+                    break
 
 
 # -------------------- AST - Loop, If --------------------#
@@ -454,11 +492,52 @@ class ArrayRange(AST.ArrayRange):
         val = self.start.eval(scope=scope)
         step = self.step.eval(scope=scope)
         stop = self.stop.eval(scope=scope)
+        if (isinstance(val, list) or isinstance(step, list) or
+                isinstance(stop, list)):
+            raise RailwayValueError('An argument to an array range was a list',
+                                    scope=scope)
+        if step == 0:
+            raise RailwayValueError(
+                f'Step value for array range must be non-zero', scope=scope)
         out = []
-        while val < self.stop:
-            out.append(Fraction(val))
-            val += self.step
+        if step > 0:
+            while val < self.stop:
+                out.append(Fraction(val))
+                val += self.step
+        else:
+            while val > self.stop:
+                out.append(Fraction(val))
+                val += self.step
         return out
+
+    def lazy_eval(self, scope, backwards):
+        start = self.start.eval(scope=scope)
+        step = self.step.eval(scope=scope)
+        stop = self.stop.eval(scope=scope)
+        if (isinstance(start, list) or isinstance(step, list) or
+                isinstance(stop, list)):
+            raise RailwayValueError('An argument to an array range was a list',
+                                    scope=scope)
+        if step == 0:
+            raise RailwayValueError(
+                f'Step value for array range must be non-zero', scope=scope)
+        length = (stop - start) // step
+        return _LazyRange(start, step, length)
+
+
+class _LazyRange:
+    def __init__(self, start, step, length):
+        self.start = start
+        self.step = step
+        self.length = length
+
+    def __getitem__(self, item):
+        if item >= self.length:
+            raise IndexError('Iternal index error in array range')
+        return Fraction(self.start + self.step * item)
+
+    def __len__(self):
+        return self.length
 
 
 class ArrayTensor(AST.ArrayTensor):
