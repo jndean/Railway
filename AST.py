@@ -36,9 +36,6 @@ class StatementNode(ABC):
 class Fraction(BuiltinFraction):
     hasmono = False
 
-    def search(self, condition):
-        return condition(self)
-
     def uses_var(self, name):
         return False
 
@@ -56,11 +53,6 @@ class Binop(ExpressionNode):
     def uses_var(self, name):
         return self.lhs.uses_var(name) or self.rhs.uses_var(name)
 
-    def search(self, condition):
-        return (condition(self)
-                or self.lhs.search(condition)
-                or self.rhs.search(condition))
-
 
 class Uniop(ExpressionNode):
     __slots__ = ["op", "expr", "name"]
@@ -74,9 +66,6 @@ class Uniop(ExpressionNode):
     def uses_var(self, name):
         return self.expr.uses_var(name)
 
-    def search(self, condition):
-        return condition(self) or self.expr.search(condition)
-
 
 class Lookup(ExpressionNode):
     __slots__ = ["name", "index", "mononame"]
@@ -89,10 +78,6 @@ class Lookup(ExpressionNode):
 
     def uses_var(self, name):
         return (self.name == name) or any(i.uses_var(name) for i in self.index)
-
-    def search(self, condition):
-        return (condition(self)
-                or any(x.search(condition) for x in self.index))
 
 
 class Parameter:
@@ -113,9 +98,6 @@ class Length(ExpressionNode):
 
     def uses_var(self, name):
         return self.lookup.uses_var(name)
-
-    def search(self, condition):
-        return condition(self) or self.lookup.search(condition)
 
 
 class ArrayLiteral(ExpressionNode):
@@ -168,11 +150,6 @@ class Let(StatementNode):
         self.lookup = lookup
         self.rhs = rhs
 
-    def search(self, condition):
-        return (condition(self)
-                or self.lookup.search(condition)
-                or self.rhs.search(condition))
-
 
 class Unlet(StatementNode):
     __slots__ = ["lookup", "rhs"]
@@ -181,11 +158,6 @@ class Unlet(StatementNode):
         super().__init__(**kwargs)
         self.lookup = lookup
         self.rhs = rhs
-
-    def search(self, condition):
-        return (condition(self)
-                or self.lookup.search(condition)
-                or self.rhs.search(condition))
 
 
 class Promote(StatementNode):
@@ -205,11 +177,6 @@ class Push(StatementNode):
         self.src_lookup = src_lookup
         self.dst_lookup = dst_lookup
 
-    def search(self, condition):
-        return (condition(self)
-                or condition(self.src_lookup)
-                or condition(self.dst_lookup))
-
 
 class Pop(StatementNode):
     __slots__ = ["src_lookup", "dst_lookup"]
@@ -218,11 +185,6 @@ class Pop(StatementNode):
         super().__init__(**kwargs)
         self.src_lookup = src_lookup
         self.dst_lookup = dst_lookup
-
-    def search(self, condition):
-        return (condition(self)
-                or condition(self.src_lookup)
-                or condition(self.dst_lookup))
 
 
 class Swap(StatementNode):
@@ -245,11 +207,6 @@ class Modop(StatementNode):
         self.expr = expr
         self.name = name
 
-    def search(self, condition):
-        return (condition(self)
-                or self.lookup.search(condition)
-                or self.expr.search(condition))
-
 
 class If(StatementNode):
     __slots__ = ["enter_expr", "lines", "else_lines", "exit_expr"]
@@ -261,13 +218,6 @@ class If(StatementNode):
         self.else_lines = else_lines
         self.exit_expr = exit_expr
 
-    def search(self, condition):
-        return (condition(self)
-                or self.enter_expr.search(condition)
-                or self.exit_expr.search(condition)
-                or any(x.search(condition) for x in self.lines)
-                or any(x.search(condition) for x in self.else_lines))
-
 
 class Loop(StatementNode):
     __slots__ = ["forward_condition", "lines", "backward_condition"]
@@ -277,12 +227,6 @@ class Loop(StatementNode):
         self.forward_condition = forward_condition
         self.lines = lines
         self.backward_condition = backward_condition
-
-    def search(self, condition):
-        return (condition(self)
-                or self.forward_condition.search(condition)
-                or self.backward_condition.search(condition)
-                or any(x.search(condition) for x in self.lines))
 
 
 class For(StatementNode):
@@ -303,11 +247,6 @@ class DoUndo(StatementNode):
         self.do_lines = do_lines
         self.yield_lines = yield_lines
 
-    def search(self, condition):
-        return (condition(self)
-                or any(ln.search(condition) for ln in self.do_lines)
-                or any(ln.search(condition) for ln in self.yield_lines))
-
 
 class Print(StatementNode):
     __slots__ = ["target"]
@@ -315,9 +254,6 @@ class Print(StatementNode):
     def __init__(self, target, **kwargs):
         super().__init__(**kwargs)
         self.target = target
-
-    def search(self, condition):
-        return condition(self)
 
 
 class CallBlock:
@@ -366,10 +302,6 @@ class Module:
         self.functions = functions
         self.global_lines = global_lines
         self.name = name
-
-    def search(self, condition):
-        return (condition(self)
-                or any(x.search(condition) for x in self.functions))
 
 
 def display(node, indent=0):
