@@ -360,10 +360,11 @@ class Function:
 
 
 class Module:
-    __slots__ = ['functions', 'name']
+    __slots__ = ['functions', 'global_lines', 'name']
 
-    def __init__(self, functions, name='Unnamed'):
+    def __init__(self, functions, global_lines, name='Unnamed'):
         self.functions = functions
+        self.global_lines = global_lines
         self.name = name
 
     def search(self, condition):

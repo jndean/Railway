@@ -46,23 +46,42 @@ def generate_parsing_function(tree):
 
     # -------------------- Module definitions -------------------- #
 
-    @pgen.production('module : functions')
+    @pgen.production('module : filelevelitems')
+    @pgen.production('module : NEWLINE filelevelitems')
     def module(state, p):
+        items = p[-1]
         extern_funcs = {}  # Temporary
-        funcs = {}
-        for func in p[0]:
-            if func.name in extern_funcs or func.name in funcs:
-                raise RailwayDuplicateDefinition(
-                    f'Function {func.name} has multiple definitions')
-            funcs[func.name] = func
-        return tree.Module(funcs)
+        funcs, global_lines = {}, []
+        for item in items:
+            if isinstance(item, tree.Function):
+                if item.name in extern_funcs or item.name in funcs:
+                    raise RailwayDuplicateDefinition(
+                        f'Function {item.name} has multiple definitions')
+                funcs[item.name] = item
+            else:
+                global_lines.append(item)
+        return tree.Module(funcs, global_lines)
 
-    @pgen.production('functions : function')
-    @pgen.production('functions : function functions')
-    def functions(state, p):
+    @pgen.production('filelevelitems : filelevelitem')
+    @pgen.production('filelevelitems : filelevelitem filelevelitems')
+    def functions_globals(state, p):
         if len(p) == 1:
             return [p[0]]
         return [p[0]] + p[1]
+
+    @pgen.production('filelevelitem : function')
+    @pgen.production('filelevelitem : global')
+    def file_level_item(state, p):
+        return p[0]
+
+    # -------------------- global declaration -------------------- #
+
+    @pgen.production('global : let NEWLINE')
+    def _global(state, p):
+        if p[0].lookup.mononame:
+            raise RailwayIllegalMono(f'GLobal variable "{p[0].lookup.name}" is '
+                                     'declared mono')
+        return p[0]
 
     # -------------------- function declaration -------------------- #
 

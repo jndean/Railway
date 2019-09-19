@@ -32,7 +32,7 @@ if __name__ == '__main__':
         sys.exit(f'Parsing error {e}')
 
     try:
-        program.eval()
+        program.main()
     except interpreting.RailwayException as e:
         sys.exit('\nCall Stack:\n-> ' +
                  '\n-> '.join(frame for frame in e.stack) +

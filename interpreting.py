@@ -50,9 +50,11 @@ class Scope:
             return self.locals[name]
         if globals and name in self.globals:
             return self.globals[name]
-        raise RailwayUndefinedVariable(
-            f'Variable "{name}" is undefined',
-            scope=self)
+        if globals:
+            msg = f'Variable "{name}" is undefined'
+        else:
+            msg = f'Local variable "{name}" is undefined'
+        raise RailwayUndefinedVariable(msg, scope=self)
 
     def assign(self, name, var):
         if var.ismono:
@@ -95,12 +97,20 @@ class Variable:
 
 class Module(AST.Module):
     def eval(self):
-        scope = Scope(parent=None, name='main', functions=self.functions,
+        scope = Scope(parent=None, name='unnamed', functions={},
                       locals={}, monos={}, globals={})
-        if 'main' not in self.functions and '.main' not in self.functions:
+        for line in self.global_lines:
+            line.eval(scope=scope, backwards=False)
+        return scope.locals
+
+    def main(self):
+        globals_ = self.eval()
+        scope = Scope(parent=None, name='main', functions=self.functions,
+                      locals={}, monos={}, globals=globals_)
+        main = self.functions.get('main', self.functions.get('.main', None))
+        if main is None:
             raise RailwayUndefinedFunction(
                 f'There is no main function in {self.name}', scope=None)
-        main = self.functions.get('main', self.functions.get('.main', None))
         main.eval(scope, backwards=False)
 
 

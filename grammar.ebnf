@@ -1,8 +1,7 @@
 
-module = {import} {global} {function} ;
+module = {import} {let_stmt} {function} ;
 
 import = "import" string ["as" [name]] ;
-global = "global" lookup "=" expression ;
 
 function = "func" name "(" [name {","  name}] ")"
                        "(" [name {","  name}] ")" "\n"
