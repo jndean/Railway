@@ -103,10 +103,13 @@ class Module(AST.Module):
             line.eval(scope=scope, backwards=False)
         return scope.locals
 
-    def main(self):
+    def main(self, argv):
+        argv = Variable(memory=argv, ismono=False,
+                        isborrowed=False, isarray=True)
         globals_ = self.eval()
         scope = Scope(parent=None, name='main', functions=self.functions,
                       locals={}, monos={}, globals=globals_)
+        scope.assign('argv', argv)
         main = self.functions.get('main', self.functions.get('.main', None))
         if main is None:
             raise RailwayUndefinedFunction(
