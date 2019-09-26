@@ -248,13 +248,21 @@ class Catch(AST.Catch):
     def eval(self, scope, backwards):
         if backwards:
             return backwards
-        return bool(self.expression.eval(scope))
+        result = bool(self.expression.eval(scope))
+        if result:
+            print("Caught")
+        return result
 
 
 def _run_lines(lines, scope, backwards):
     i = len(lines) - 1 if backwards else 0
     while 0 <= i < len(lines):
-        backwards = lines[i].eval(scope, backwards)
+        new_backwards = lines[i].eval(scope, backwards)
+        if (new_backwards != backwards) and scope.monos:
+            name = scope.monos.popitem()[0]
+            raise RailwayDirectionChange('Direction of time changes with mono '
+                                         f'variable "{name}" in scope', scope)
+        backwards = new_backwards
         i = i-1 if backwards else i+1
     return backwards
 
@@ -345,29 +353,30 @@ class For(AST.For):
 
 class Loop(AST.Loop):
     def eval(self, scope, backwards):
+        if backwards and not self.modreverse:
+            return True
         if backwards:
-            if not self.modreverse:
-                return backwards
             condition = self.backward_condition
             assertion = self.forward_condition
-            lines = self.lines[::-1]  # reversed() builtin no good here
         else:
             condition = self.forward_condition
             assertion = self.backward_condition
-            lines = self.lines
         if not self.ismono and assertion.eval(scope):
             raise RailwayFailedAssertion(
                 'Loop reverse condition is true before loop start',
                 scope=scope)
         while condition.eval(scope):
-            for line in lines:
-                line.eval(scope, backwards)
-            if not self.ismono:
-                if not assertion.eval(scope):
-                    raise RailwayFailedAssertion(
-                        'Foward loop condition holds when'
-                        ' reverse condition does not',
-                        scope=scope)
+            backwards = _run_lines(self.lines, scope, backwards)
+            if backwards:
+                condition = self.backward_condition
+                assertion = self.forward_condition
+            else:
+                condition = self.forward_condition
+                assertion = self.backward_condition
+            if (not self.ismono) and (not assertion.eval(scope)):
+                raise RailwayFailedAssertion('Foward loop condition holds when'
+                                             ' reverse condition does not',
+                                             scope=scope)
         return backwards
 
 
