@@ -28,6 +28,7 @@ class RailwayValueError(RailwayException): pass
 class RailwayCallError(RailwayException): pass
 class RailwayIllegalMono(RailwayException): pass
 class RailwayExpectedMono(RailwayException): pass
+class RailwayExhaustedTry(RailwayException): pass
 
 
 # -------------------- Interpreter-Only Objects ---------------------- #
@@ -140,7 +141,7 @@ class Function(AST.Function):
 class CallChain(AST.CallChain):
     def eval(self, scope, backwards):
         if backwards and self.ismono:
-            return
+            return backwards
         params = self.out_params if backwards else self.in_params
         variables = [scope.lookup(p.name, globals=False) for p in params]
         for var, p in zip(variables, params):
@@ -161,6 +162,7 @@ class CallChain(AST.CallChain):
             _check_mono_match(
                 var, param, call.isuncall ^ backwards, call.name, scope)
             scope.assign(param.name, var)
+        return backwards
 
 
 def _eval_call(call, backwards, variables, scope):
@@ -206,6 +208,57 @@ def _check_mono_match(variable, parameter, isuncall, fname, scope):
 CallBlock = AST.CallBlock
 
 
+# -------------------- Try-Catch --------------------#
+
+class Try(AST.Try):
+    def eval(self, scope, backwards):
+        if backwards:
+            backwards = _run_lines(self.lines, scope, backwards)
+            scope.remove(self.lookup.name)
+            return backwards
+        if hasattr(self.iterator, 'lazy_eval'):
+            memory = self.iterator.lazy_eval(scope, backwards)
+        else:
+            memory = self.iterator.eval(scope)
+            if isinstance(memory, Fraction):
+                raise RailwayTypeError('The iterator provided to Try must be an'
+                                       f' array, recieved a number', scope)
+        # lines = self.lines[::-1] if backwards else self.lines
+        name = self.lookup.name
+        i = 0
+        while i < len(memory):
+            value = memory[i]
+            if isinstance(value, Fraction):
+                var = Variable(memory=[value], ismono=False, isborrowed=False,
+                               isarray=False)
+            else:
+                var = Variable(memory=value, ismono=False, isborrowed=False,
+                               isarray=True)
+            scope.assign(name, var)
+            caught = _run_lines(self.lines, scope, backwards)
+            if caught:
+                scope.remove(name)
+                i += 1
+            else:
+                return backwards
+        raise RailwayExhaustedTry(f'No value of "{name}" was uncaught', scope)
+
+
+class Catch(AST.Catch):
+    def eval(self, scope, backwards):
+        if backwards:
+            return backwards
+        return bool(self.expression.eval(scope))
+
+
+def _run_lines(lines, scope, backwards):
+    i = len(lines) - 1 if backwards else 0
+    while 0 <= i < len(lines):
+        backwards = lines[i].eval(scope, backwards)
+        i = i-1 if backwards else i+1
+    return backwards
+
+
 # -------------------- AST - Print --------------------#
 
 class Print(AST.Print):
@@ -217,6 +270,7 @@ class Print(AST.Print):
         else:
             memory = self.target.eval(scope)
             print(self.stringify(memory))
+        return backwards
 
     def stringify(self, memory):
         # Temporary implementation
@@ -248,6 +302,7 @@ class DoUndo(AST.DoUndo):
                 scope=scope)
         for line in reversed(self.do_lines):
             line.eval(scope, backwards=True)
+        return backwards
 
 
 # -------------------- AST - For --------------------#
@@ -258,10 +313,13 @@ class For(AST.For):
             memory = self.iterator.lazy_eval(scope, backwards)
         else:
             memory = self.iterator.eval(scope)
+            if isinstance(memory, Fraction):
+                raise RailwayTypeError('For loop must iterate over array, '
+                                       f'recieved number {memory}', scope=scope)
         lines = self.lines[::-1] if backwards else self.lines
         name = self.lookup.name
         i = len(memory)-1 if backwards else 0
-        while True:
+        while 0 <= i < len(memory):
             elt = memory[i]
             backup = elt
             if not isinstance(elt, Fraction):
@@ -278,14 +336,9 @@ class For(AST.For):
                     f'after an iteration, but the source array has '
                     f'corresponding value {memory[i]}', scope=scope)
             scope.remove(name)
-            if backwards:
-                i -= 1
-                if i < 0:
-                    break
-            else:
-                i += 1
-                if i >= len(memory):
-                    break
+            i += -1 if backwards else 1
+
+        return backwards
 
 
 # -------------------- AST - Loop, If --------------------#
@@ -294,7 +347,7 @@ class Loop(AST.Loop):
     def eval(self, scope, backwards):
         if backwards:
             if not self.modreverse:
-                return
+                return backwards
             condition = self.backward_condition
             assertion = self.forward_condition
             lines = self.lines[::-1]  # reversed() builtin no good here
@@ -315,16 +368,19 @@ class Loop(AST.Loop):
                         'Foward loop condition holds when'
                         ' reverse condition does not',
                         scope=scope)
+        return backwards
 
 
 class If(AST.If):
     def eval(self, scope, backwards):
         if backwards and not self.modreverse:
-            return
+            return backwards
         enter_expr = self.exit_expr if backwards else self.enter_expr
         exit_expr = self.enter_expr if backwards else self.exit_expr
         enter_result = bool(enter_expr.eval(scope))
         lines = self.lines if enter_result else self.else_lines
+        # lines = reversed(lines) if backwards else lines
+        # new_backwards = _run_lines(lines, scope, backwards)
         for line in reversed(lines) if backwards else lines:
             line.eval(scope, backwards)
         if not self.ismono:
@@ -333,6 +389,7 @@ class If(AST.If):
                 raise RailwayFailedAssertion(
                     'Failed exit assertion in if-fi statement',
                     scope=scope)
+        return backwards
 
 
 # -------------------- AST - Push Pop Swap --------------------#
@@ -340,10 +397,11 @@ class If(AST.If):
 class Push(AST.Push):
     def eval(self, scope, backwards):
         if backwards:
-            if self.ismono:
-                return
-            return pop_eval(scope, self.dst_lookup, self.src_lookup)
-        return push_eval(scope, self.src_lookup, self.dst_lookup)
+            if not self.ismono:
+                pop_eval(scope, self.dst_lookup, self.src_lookup)
+        else:
+            push_eval(scope, self.src_lookup, self.dst_lookup)
+        return backwards
 
 
 def push_eval(scope, src_lookup, dst_lookup):
@@ -371,10 +429,11 @@ def push_eval(scope, src_lookup, dst_lookup):
 class Pop(AST.Pop):
     def eval(self, scope, backwards):
         if backwards:
-            if self.ismono:
-                return
-            return push_eval(scope, self.dst_lookup, self.src_lookup)
-        return pop_eval(scope, self.src_lookup, self.dst_lookup)
+            if not self.ismono:
+                push_eval(scope, self.dst_lookup, self.src_lookup)
+        else:
+            pop_eval(scope, self.src_lookup, self.dst_lookup)
+        return backwards
 
 
 def pop_eval(scope, src_lookup, dst_lookup):
@@ -418,6 +477,7 @@ class Promote(AST.Promote):
             scope.remove(self.src_name)
             var.ismono = False
             scope.assign(self.dst_name, var)
+        return backwards
 
 
 # -------------------- AST - Modifications --------------------#
@@ -425,7 +485,7 @@ class Promote(AST.Promote):
 class Modop(AST.Modop):
     def eval(self, scope, backwards):
         if backwards and self.ismono:
-            return
+            return backwards
         op = self.inv_op if backwards else self.op
         lhs, rhs = self.lookup.eval(scope), self.expr.eval(scope)
         try:
@@ -437,6 +497,7 @@ class Modop(AST.Modop):
         self.lookup.set(scope, result)
         # The seperate lookup.eval and lookup.set calls are
         # an opportunity for optimisation
+        return backwards
 
 
 # -------------------- AST - Let and Unlet --------------------#
@@ -444,19 +505,21 @@ class Modop(AST.Modop):
 class Let(AST.Let):
     def eval(self, scope, backwards):
         if backwards:
-            if self.ismono:
-                return
-            return unlet_eval(self, scope)
-        return let_eval(self, scope)
+            if not self.ismono:
+                unlet_eval(self, scope)
+        else:
+            let_eval(self, scope)
+        return backwards
 
 
 class Unlet(AST.Unlet):
     def eval(self, scope, backwards):
         if backwards:
-            if self.ismono:
-                return
-            return let_eval(self, scope)
-        return unlet_eval(self, scope)
+            if not self.ismono:
+                let_eval(self, scope)
+        else:
+            unlet_eval(self, scope)
+        return backwards
 
 
 def let_eval(self, scope):

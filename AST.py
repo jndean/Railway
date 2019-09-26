@@ -248,6 +248,24 @@ class DoUndo(StatementNode):
         self.yield_lines = yield_lines
 
 
+class Try(StatementNode):
+    __slots__ = ["lookup", "iterator", "lines"]
+
+    def __init__(self, lookup, iterator, lines, **kwargs):
+        super().__init__(**kwargs)
+        self.lookup = lookup
+        self.iterator = iterator
+        self.lines = lines
+
+
+class Catch(StatementNode):
+    __slots__ = ["expression"]
+
+    def __init__(self, expression, **kwargs):
+        super().__init__(**kwargs)
+        self.expression = expression
+
+
 class Print(StatementNode):
     __slots__ = ["target"]
 

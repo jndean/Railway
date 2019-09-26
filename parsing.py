@@ -197,6 +197,8 @@ def generate_parsing_function(tree):
     @pgen.production('stmt : if')
     @pgen.production('stmt : loop')
     @pgen.production('stmt : for')
+    @pgen.production('stmt : try')
+    @pgen.production('stmt : catch')
     @pgen.production('stmt : modification')
     @pgen.production('stmt : push')
     @pgen.production('stmt : pop')
@@ -207,6 +209,25 @@ def generate_parsing_function(tree):
     @pgen.production('statement : stmt NEWLINE')
     def statement(state, p):
         return p[0]
+
+    # -------------------- try / catch -------------------- #
+
+    @pgen.production('catch : CATCH expression')
+    def catch(state, p):
+        return tree.Catch(p[1], modreverse=False, ismono=True)
+
+    @pgen.production('try : TRY LPAREN parameter IN expression RPAREN NEWLINE'
+                     '      statements YRT')
+    def _try(state, p):
+        lookup, iterator, lines = p[2], p[4], p[7]
+        if lookup.mononame:
+            raise RailwayIllegalMono(
+                f'Try statement assigns to mono name "{lookup.name}"')
+        if iterator.hasmono:
+            raise RailwayIllegalMono(f'Try statement has mono-directional '
+                                     f'information in its iterator')
+        return tree.Try(lookup=lookup, iterator=iterator, lines=lines,
+                        ismono=False, modreverse=True)
 
     # -------------------- do-yield-undo -------------------- #
 
