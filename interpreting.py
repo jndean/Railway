@@ -385,19 +385,20 @@ class If(AST.If):
         if backwards and not self.modreverse:
             return backwards
         enter_expr = self.exit_expr if backwards else self.enter_expr
-        exit_expr = self.enter_expr if backwards else self.exit_expr
         enter_result = bool(enter_expr.eval(scope))
         lines = self.lines if enter_result else self.else_lines
+        backwards = _run_lines(lines, scope, backwards)
         # lines = reversed(lines) if backwards else lines
         # new_backwards = _run_lines(lines, scope, backwards)
-        for line in reversed(lines) if backwards else lines:
-            line.eval(scope, backwards)
+        # for line in reversed(lines) if backwards else lines:
+        #     line.eval(scope, backwards)
+        exit_expr = self.enter_expr if backwards else self.exit_expr
         if not self.ismono:
             exit_result = bool(exit_expr.eval(scope))
             if exit_result != enter_result:
                 raise RailwayFailedAssertion(
-                    'Failed exit assertion in if-fi statement',
-                    scope=scope)
+                    'The exit assertion in an if statement gave a different '
+                    'result to the entrance condition', scope=scope)
         return backwards
 
 

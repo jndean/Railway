@@ -3,12 +3,12 @@ func main(argv)()
     try (var in [1, 2, 3, 4])
       print "var is"
       print var
-      let i = 0
-      loop (i < 4)
-        print i
-        catch (var == i)
-        i += 1
-      pool (i > 0)
+      if (var > 2)
+        catch (var < 4)
+      else
+        catch (var < 10)
+      fi ()
+
     yrt
   yield
     print "final var"
