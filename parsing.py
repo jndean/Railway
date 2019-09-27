@@ -244,13 +244,21 @@ def generate_parsing_function(tree):
 
     # -------------------- print -------------------- #
 
-    @pgen.production('print : PRINT expression')
-    @pgen.production('print : PRINT string')
+    @pgen.production('print : PRINT LPAREN printables RPAREN')
     def print_expression(state, p):
-        target = p[1]
-        ismono = (not isinstance(target, str)) and target.hasmono
-        return tree.Print(
-            target, ismono=ismono, modreverse=False)
+        targets = p[2]
+        ismono = any((not isinstance(t, str)) and t.hasmono
+                     for t in targets)
+        return tree.Print(targets, ismono=ismono, modreverse=False)
+
+    @pgen.production('printables : string')
+    @pgen.production('printables : expression')
+    @pgen.production('printables : string COMMA printables')
+    @pgen.production('printables : expression COMMA printables')
+    def printable(state, p):
+        if len(p) == 1:
+            return [p[0]]
+        return [p[0]] + p[2]
 
     # -------------------- modification -------------------- #
 
@@ -304,7 +312,6 @@ def generate_parsing_function(tree):
                                      ' non-mono variables')
         return tree.For(lookup=lookup, iterator=iterator, lines=lines,
                         ismono=ismono, modreverse=modreverse)
-
 
     # -------------------- loop -------------------- #
 

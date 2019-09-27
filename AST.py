@@ -267,11 +267,11 @@ class Catch(StatementNode):
 
 
 class Print(StatementNode):
-    __slots__ = ["target"]
+    __slots__ = ["targets"]
 
-    def __init__(self, target, **kwargs):
+    def __init__(self, targets, **kwargs):
         super().__init__(**kwargs)
-        self.target = target
+        self.targets = targets
 
 
 class CallBlock:

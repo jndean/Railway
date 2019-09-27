@@ -248,10 +248,7 @@ class Catch(AST.Catch):
     def eval(self, scope, backwards):
         if backwards:
             return backwards
-        result = bool(self.expression.eval(scope))
-        if result:
-            print("Caught")
-        return result
+        return bool(self.expression.eval(scope))
 
 
 def _run_lines(lines, scope, backwards):
@@ -272,12 +269,10 @@ def _run_lines(lines, scope, backwards):
 class Print(AST.Print):
     def eval(self, scope, backwards=False):
         if backwards:
-            pass#return
-        if isinstance(self.target, str):
-            print(self.target)
-        else:
-            memory = self.target.eval(scope)
-            print(self.stringify(memory))
+            pass #return
+        vals = [t if isinstance(t, str) else self.stringify(t.eval(scope))
+                for t in self.targets]
+        print(' '.join(vals))
         return backwards
 
     def stringify(self, memory):

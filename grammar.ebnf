@@ -52,7 +52,7 @@ catch_stmt = "catch" "(" expression ")" ;
 
 mod_stmt = lookup modification_op expression ;
 
-print_stmt = "print" "(" lookup {"," lookup} ")" ;
+print_stmt = "print" "(" (lookup | string) {"," (lookup | string)} ")" ;
 
 call_block = ("call" | "uncall") name ["{" expression "}"]
              "(" name {"," name} ")" ;

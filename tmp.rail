@@ -1,6 +1,6 @@
 func main(argv)()
   try (x in [3,5,8,0])
-    print x
+    print (x)
     do
       let y = x + 10
       catch (y != 10)
@@ -9,8 +9,8 @@ func main(argv)()
     undo
   yrt
 
-  print "result is"
-  print result
+  print("result is", result)
+
   unlet result = 10
   unlet x
 return ()
