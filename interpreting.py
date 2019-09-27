@@ -291,25 +291,26 @@ class Print(AST.Print):
 
 class DoUndo(AST.DoUndo):
     def eval(self, scope, backwards):
-        for line in self.do_lines:
-            line.eval(scope, backwards=False)
+        # The 'do' lines may reverse
+        if _run_lines(self.do_lines, scope, backwards=False):
+            return True
         if scope.monos and backwards:
-            name = next(iter(scope.monos.keys()))
+            name = scope.monos.popitem()[0]
             raise RailwayDirectionChange(
-                'Changing direction of time at the end of a do block '
-                f'whilst mono-directional variable "{name}" is in scope',
-                scope=scope)
-        yield_lines = self.yield_lines
-        for line in reversed(yield_lines) if backwards else yield_lines:
-            line.eval(scope, backwards)
+                'Changing direction of time at the end of a do block whilst '
+                f'mono-directional variable "{name}" is in scope', scope=scope)
+
+        yield_backwards = _run_lines(self.yield_lines, scope, backwards)
+        if yield_backwards != backwards:
+            _run_lines(self.do_lines, scope, backwards=True)
+            return True
         if scope.monos and not backwards:
-            name = next(iter(scope.monos.keys()))
+            name = scope.monos.popitem()[0]
             raise RailwayDirectionChange(
-                'Changing direction of time using an undo block '
-                f'whilst mono-directional variable "{name}" is in scope',
-                scope=scope)
-        for line in reversed(self.do_lines):
-            line.eval(scope, backwards=True)
+                'Changing direction of time using an undo block whilst mono-'
+                f'directional variable "{name}" is in scope', scope=scope)
+
+        _run_lines(self.do_lines, scope, backwards=True)
         return backwards
 
 

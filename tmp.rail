@@ -1,23 +1,16 @@
 func main(argv)()
+  try (x in [3,5,8,0])
+    print x
+    do
+      let y = x + 10
+      catch (y != 10)
+    yield
+      let result = y
+    undo
+  yrt
 
-
-
-  do
-    let sum = 999
-    try (var in [1, 2, 3, 4])
-      print "var is"
-      print var
-      for (i in [3 to 0 by -1])
-        if (1)
-          print i
-          sum += 5
-          catch (i == var)
-        fi ()
-      rof
-    yrt
-  yield
-    print "final var"
-    print var
-  undo
-
+  print "result is"
+  print result
+  unlet result = 10
+  unlet x
 return ()
