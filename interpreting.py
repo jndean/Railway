@@ -336,8 +336,7 @@ class For(AST.For):
             var = Variable(memory=[elt], ismono=self.lookup.mononame,
                            isborrowed=True, isarray=False)
             scope.assign(name, var)
-            for line in lines:
-                line.eval(scope, backwards)
+            backwards = _run_lines(lines, scope, backwards)
             if var.memory[0] != memory[i]:
                 raise RailwayValueError(
                     f'For loop variable "{name}" has value {var.memory[0]} '
@@ -345,7 +344,6 @@ class For(AST.For):
                     f'corresponding value {memory[i]}', scope=scope)
             scope.remove(name)
             i += -1 if backwards else 1
-
         return backwards
 
 
