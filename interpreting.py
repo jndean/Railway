@@ -320,7 +320,6 @@ class For(AST.For):
             if isinstance(memory, Fraction):
                 raise RailwayTypeError('For loop must iterate over array, '
                                        f'recieved number {memory}', scope=scope)
-        lines = self.lines[::-1] if backwards else self.lines
         name = self.lookup.name
         i = len(memory)-1 if backwards else 0
         while 0 <= i < len(memory):
@@ -332,7 +331,7 @@ class For(AST.For):
             var = Variable(memory=[elt], ismono=self.lookup.mononame,
                            isborrowed=True, isarray=False)
             scope.assign(name, var)
-            backwards = _run_lines(lines, scope, backwards)
+            backwards = _run_lines(self.lines, scope, backwards)
             if var.memory[0] != memory[i]:
                 raise RailwayValueError(
                     f'For loop variable "{name}" has value {var.memory[0]} '
@@ -694,12 +693,12 @@ class Uniop(AST.Uniop):
 
 class Length(AST.Length):
     def eval(self, scope):
-        var = scope.lookup(self.lookup.name)
-        if not var.isarray:
-            raise RailwayTypeError(f'Variable "{self.lookup.name}" '
-                                   'has no length as it is not an array',
-                                   scope=scope)
-        return Fraction(len(var.memory))
+        value = self.lookup.eval(scope)
+        if not isinstance(value, list):
+            raise RailwayTypeError(
+                f'Taking the length of non-array in "{self.lookup.name}"',
+                scope=scope)
+        return Fraction(len(value))
 
 
 class Lookup(AST.Lookup):
