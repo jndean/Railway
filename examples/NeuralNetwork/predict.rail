@@ -1,0 +1,33 @@
+
+let img_res = 28 * 28
+let num_hidden = 100
+let num_classes = 10
+
+
+func main(argv)()
+
+  do
+    pop 
+    pop W2_flat <= argv
+    pop W1_flat <= argv
+    (W1) <= call reshape2D(W1_flat, img_res, num_hidden)
+    (W2) <= call reshape2D(W2_flat, num_hidden, num_classes)
+  yield
+    print (#W2, #W1)
+  undo
+
+return ()
+
+
+
+func reshape2D(X, height, width)()
+
+  let out = [0 tensor [height, width]]
+  
+  for (rownum in [0 to height])
+    for (colnum in [0 to width])
+      out[rownum][colnum] += X[rownum * width + colnum]
+    rof
+  rof
+
+return (out)
