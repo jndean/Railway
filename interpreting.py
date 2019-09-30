@@ -710,8 +710,8 @@ class Lookup(AST.Lookup):
             try:
                 for idx in index:
                     output = output[idx]
-            except IndexError:
-                index_repr = f'{self.name}[{", ".join(str(i) for i in index)}]'
+            except TypeError:
+                index_repr = f'{self.name}[{"][".join(str(i) for i in index)}]'
                 if isinstance(output, Fraction):
                     msg = 'Indexing into number during lookup '
                 else:
