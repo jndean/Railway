@@ -7,27 +7,91 @@ let num_classes = 10
 func main(argv)()
 
   do
-    pop 
+    $ Unpack argv $
+    pop image_row <= argv
     pop W2_flat <= argv
     pop W1_flat <= argv
+
+    $ Reshape inputs into matrices $
+    let image = []
+    push image <= image_row
     (W1) <= call reshape2D(W1_flat, img_res, num_hidden)
     (W2) <= call reshape2D(W2_flat, num_hidden, num_classes)
+
+    $ Ascii draw the image $
+    call .draw(image)
+
+    $ Apply the network $
+    (h1) <= call matmul(image, W1)
+    (h2) <= call ReLU_2D(h1)
+    (h3) <= call matmul(h2, W2)
+    (class) <= call argmax(h3)
+
   yield
-    print (#W2, #W1)
+    println ("Predicted Class:", class)
   undo
 
 return ()
 
 
+func matmul(X, Y)()
+  let result = []
+  for (row_num in [0 to #X])
+    let row = []
+    for (col_num in [0 to #Y[0]])
+      let sum = 0
+      for (i in [0 to #Y])
+        sum += X[row_num][i] * Y[i][col_num]
+      rof
+      push sum => row
+    rof
+    push row => result
+  rof
+return (result)
+
 
 func reshape2D(X, height, width)()
-
-  let out = [0 tensor [height, width]]
-  
+  let result = [0 tensor [height, width]]
   for (rownum in [0 to height])
     for (colnum in [0 to width])
-      out[rownum][colnum] += X[rownum * width + colnum]
+      result[rownum][colnum] += X[rownum * width + colnum]
     rof
   rof
+return (result)
 
-return (out)
+
+func argmax(X)()
+   try (best in [0 to #X[0]])
+     for (i in [0 to #X[0]])
+       catch (X[0][best] < X[0][i])
+     rof
+   yrt
+return (best)
+
+
+func ReLU_2D(X)()
+  let output = []
+  for (y in [0 to #X])
+    let row = [0 tensor [#X[y]]]
+    for (x in [0 to #X[y]])
+      if (X[y][x] > 0)
+        row[x] += X[y][x]
+      fi ()
+    rof
+    push row => output
+  rof
+return (output)
+
+
+func .draw(X)()
+  for (.y in [0 to 28])
+    for (.x in [0 to 28])
+      if (X[0][.y*28 + .x])
+        print("  ")
+      else
+        print("XX")
+      fi ()
+    rof
+    println(" ")
+  rof
+return ()

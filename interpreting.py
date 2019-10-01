@@ -270,16 +270,27 @@ class Print(AST.Print):
     def eval(self, scope, backwards=False):
         if backwards:
             pass #return
-        vals = [t if isinstance(t, str) else self.stringify(t.eval(scope))
+        vals = [t if isinstance(t, str) else _stringify(t.eval(scope))
                 for t in self.targets]
-        print(' '.join(vals))
+        print(' '.join(vals), end="", flush=True)
         return backwards
 
-    def stringify(self, memory):
-        # Temporary implementation
-        if isinstance(memory, Fraction):
-            return str(memory)
-        return '[' + ', '.join(self.stringify(elt) for elt in memory) + ']'
+
+class PrintLn(AST.PrintLn):
+    def eval(self, scope, backwards=False):
+        if backwards:
+            pass #return
+        vals = [t if isinstance(t, str) else _stringify(t.eval(scope))
+                for t in self.targets]
+        print(' '.join(vals), flush=True)
+        return backwards
+
+
+def _stringify(memory):
+    # Temporary implementation
+    if isinstance(memory, Fraction):
+        return str(memory)
+    return '[' + ', '.join(_stringify(elt) for elt in memory) + ']'
 
 
 # -------------------- AST - Do-Yield-Undo --------------------#
@@ -710,7 +721,7 @@ class Lookup(AST.Lookup):
             try:
                 for idx in index:
                     output = output[idx]
-            except TypeError:
+            except (IndexError, TypeError):
                 index_repr = f'{self.name}[{"][".join(str(i) for i in index)}]'
                 if isinstance(output, Fraction):
                     msg = 'Indexing into number during lookup '

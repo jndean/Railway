@@ -206,6 +206,7 @@ def generate_parsing_function(tree):
     @pgen.production('stmt : call_stmt')
     @pgen.production('stmt : promote')
     @pgen.production('stmt : print')
+    @pgen.production('stmt : println')
     @pgen.production('statement : stmt NEWLINE')
     def statement(state, p):
         return p[0]
@@ -244,12 +245,14 @@ def generate_parsing_function(tree):
 
     # -------------------- print -------------------- #
 
+    @pgen.production('println : PRINTLN LPAREN printables RPAREN')
     @pgen.production('print : PRINT LPAREN printables RPAREN')
     def print_expression(state, p):
         targets = p[2]
         ismono = any((not isinstance(t, str)) and t.hasmono
                      for t in targets)
-        return tree.Print(targets, ismono=ismono, modreverse=False)
+        Node = tree.Print if p[0].getstr() == 'print' else tree.PrintLn
+        return Node(targets, ismono=ismono, modreverse=False)
 
     @pgen.production('printables : string')
     @pgen.production('printables : expression')
