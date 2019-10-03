@@ -110,7 +110,7 @@ class Variable:
         self.isarray = isarray
 
 
-# ------------------------- AST Objects --------------------------#
+# ------------------------- AST Module level --------------------------#
 
 class Module(AST.Module):
     def main(self, argv):
@@ -121,15 +121,12 @@ class Module(AST.Module):
         for line in self.global_lines:
             line.eval(scope=scope)
         scope.assign('argv', argv)
-        print(scope.functions)
         main = self.functions.get('main', self.functions.get('.main', None))
         if main is None:
             raise RailwayUndefinedFunction(
                 f'There is no main function in {self.name}', scope=None)
         main.eval(scope, backwards=False)
 
-
-# ------------------------ AST - Imports ------------------------#
 
 class Import(AST.Import):
     def eval(self, scope):
@@ -153,8 +150,6 @@ class Import(AST.Import):
                         f'Name clash of "{name}" during import', scope=scope)
                 dst[name] = val
 
-
-# ------------------------ AST - Globals ------------------------#
 
 class Global(AST.Global):
     def eval(self, scope):

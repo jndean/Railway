@@ -1,7 +1,7 @@
 
-let img_res = 28 * 28
-let num_hidden = 100
-let num_classes = 10
+global img_res = 28 * 28
+global num_hidden = 30
+global num_classes = 10
 
 
 func main(argv)()
