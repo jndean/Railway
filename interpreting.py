@@ -1,6 +1,7 @@
 from copy import deepcopy
 
 import AST
+from parsing import generate_parsing_function
 
 
 # -------------------- Exceptions ----------------------  #
@@ -16,7 +17,7 @@ class RailwayException(RuntimeError):
 
 class RailwayLeakedInformation(RailwayException): pass
 class RailwayUndefinedVariable(RailwayException): pass
-class RailwayVariableExists(RailwayException): pass
+class RailwayNameClash(RailwayException): pass
 class RailwayIndexError(RailwayException): pass
 class RailwayTypeError(RailwayException): pass
 class RailwayUndefinedFunction(RailwayException): pass
@@ -29,6 +30,7 @@ class RailwayCallError(RailwayException): pass
 class RailwayIllegalMono(RailwayException): pass
 class RailwayExpectedMono(RailwayException): pass
 class RailwayExhaustedTry(RailwayException): pass
+class RailwayImportError(RailwayException): pass
 
 
 # -------------------- Interpreter-Only Objects ---------------------- #
@@ -62,7 +64,7 @@ class Scope:
             self.monos[name] = var
         else:
             if name in self.locals:
-                raise RailwayVariableExists(
+                raise RailwayNameClash(
                     f'Variable "{name}" already exists',
                     scope=self)
             self.locals[name] = var
@@ -83,6 +85,20 @@ class Scope:
                                            scope=self)
         return self.functions[name]
 
+    def assign_func(self, name, func):
+        if name in self.functions:
+            raise RailwayNameClash(
+                f'Function "{name}" already exists in scope "{self.name}"',
+                scope=self)
+        self.functions[name] = func
+
+    def assign_global(self, name, var):
+        if name in self.globals:
+            raise RailwayNameClash(
+                f'Global "{name}" already exists in scope "{self.name}"',
+                scope=self)
+        self.globals[name] = var
+
 
 class Variable:
     __slots__ = ['memory', 'ismono', 'isborrowed', 'isarray']
@@ -97,25 +113,61 @@ class Variable:
 # ------------------------- AST Objects --------------------------#
 
 class Module(AST.Module):
-    def eval(self):
-        scope = Scope(parent=None, name='unnamed', functions={},
-                      locals={}, monos={}, globals={})
-        for line in self.global_lines:
-            line.eval(scope=scope, backwards=False)
-        return scope.locals
-
     def main(self, argv):
         argv = Variable(memory=argv, ismono=False,
                         isborrowed=False, isarray=True)
-        globals_ = self.eval()
         scope = Scope(parent=None, name='main', functions=self.functions,
-                      locals={}, monos={}, globals=globals_)
+                      locals={}, monos={}, globals={})
+        for line in self.global_lines:
+            line.eval(scope=scope)
         scope.assign('argv', argv)
+        print(scope.functions)
         main = self.functions.get('main', self.functions.get('.main', None))
         if main is None:
             raise RailwayUndefinedFunction(
                 f'There is no main function in {self.name}', scope=None)
         main.eval(scope, backwards=False)
+
+
+# ------------------------ AST - Imports ------------------------#
+
+class Import(AST.Import):
+    def eval(self, scope):
+        parser = generate_parsing_function(None)
+        try:
+            module = parser(self.filename)
+        except (FileNotFoundError, PermissionError, OSError):
+            raise RailwayImportError(
+                f'Error opening file "{self.filename}"', scope=scope)
+        module_scope = Scope(parent=scope, name=self.filename, locals={},
+                             monos={}, globals={}, functions={})
+        for line in module.global_lines:
+            line.eval(scope=module_scope)
+        for src, dst in [(module_scope.globals, scope.globals),
+                         (module_scope.functions, scope.functions),
+                         (module.functions, scope.functions)]:
+            for key, val in src.items():
+                name = key if self.alias == '' else self.alias + '.' + key
+                if name in dst:
+                    raise RailwayNameClash(
+                        f'Name clash of "{name}" during import', scope=scope)
+                dst[name] = val
+
+
+# ------------------------ AST - Globals ------------------------#
+
+class Global(AST.Global):
+    def eval(self, scope):
+        value = self.rhs.eval(scope=scope)
+        isarray = isinstance(value, list)
+        if isinstance(value, Fraction):
+            memory = [value]
+        elif hasattr(self.rhs, 'unowned') and self.rhs.unowned:
+            memory = value
+        else:
+            memory = deepcopy(value)
+        var = Variable(memory=memory, ismono=False, isarray=isarray)
+        scope.assign_global(name=self.lookup.name, var=var)
 
 
 # ---------------- AST - Function bodies and calls ----------------#

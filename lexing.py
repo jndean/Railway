@@ -7,6 +7,7 @@ lg = LexerGenerator()
 
 lg.add("IMPORT", r"import")
 lg.add("AS", r"as")
+lg.add("GLOBAL", r"global")
 lg.add("LET", r"let")
 lg.add("UNLET", r"unlet")
 lg.add('FUNC', r"func")
@@ -84,7 +85,7 @@ lg.add("LEN", r"#")
 lg.add("NOT", r"!")
 
 lg.add("NUMBER", r"\d+(\/\d+)?")
-lg.add("NAME", r"[a-zA-Z][a-zA-Z0-9_.]*")
+lg.add("NAME", r"[a-zA-Z_][a-zA-Z0-9_.]*")
 lg.add("STRING", r"\"[^\"]*\"")
 lg.add("NEWLINE", r"\n[ \t\r\f\v\n]*")
 

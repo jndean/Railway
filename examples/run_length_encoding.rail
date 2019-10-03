@@ -1,9 +1,10 @@
 func main(argv)()
     do
         let data = [0,0,0,3,3,3,3,3,3,3,5,5,5,0,0,0]
+         println ("Data:", data)
         (data) => call compress() => (compressed)
     yield
-        print compressed
+        println ("Encoded:", compressed)
     undo
 return ()
 

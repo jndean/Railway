@@ -4,8 +4,9 @@ import sys
 import rply
 
 import interpreting
-from interpreting import Fraction
+from interpreting import Fraction, RailwayException
 from lexing import lexer
+import parsing
 from parsing import generate_parsing_function, RailwaySyntaxError
 
 
@@ -47,31 +48,11 @@ if __name__ == '__main__':
 
     filename = sys.argv[1]
     argv = parse_argv(sys.argv[2:])
-
-    with open(filename, 'r') as f:
-        source = f.read() + '\n'
-    tokens = lexer.lex(source)
     parse = generate_parsing_function(tree=interpreting)
-
-    try:
-        program = parse(tokens, filename)
-    except RailwaySyntaxError as e:
-        sys.exit('\nSyntax Error of type ' +
-                 type(e).__name__ + ':\n' +
-                 e.args[0])
-    except rply.ParsingError as e:
-        sourcepos = e.getsourcepos()
-        if sourcepos is not None:
-            lineno = e.getsourcepos().lineno
-            marker = ' ' * (e.getsourcepos().colno - 1) + '^'
-            sys.exit(f'\nParsing Error\n File: {filename}\n Line: {lineno}\n\n' +
-                     source.splitlines()[lineno-1] + '\n' +
-                     marker)
-        sys.exit(f'Parsing error {e}')
-
+    program = parse(filename)
     try:
         program.main(argv)
-    except interpreting.RailwayException as e:
+    except RailwayException as e:
         sys.exit('\nCall Stack:\n-> ' +
                  '\n-> '.join(frame for frame in e.stack) +
                  '\nRuntime Error of type ' + type(e).__name__ + ':\n' +

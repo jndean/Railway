@@ -1,15 +1,17 @@
-from collections import namedtuple, defaultdict
+from collections import namedtuple
+from os.path import split as os_split
 import sys
 
 from rply import ParserGenerator, Token
+from rply import ParsingError as RplyParsingError
 
 import AST
 import interpreting
 import lexing
 
-__all__ = ["generate_parsing_function"]
+__all__ = ['generate_parsing_function', 'RailwaySyntaxError']
 
-
+parsing_func_cache = []
 ParserState = namedtuple('ParserState', ['filename', 'parser'])
 
 # -------------------------- Exceptions -------------------------- #
@@ -30,6 +32,8 @@ class RailwayDuplicateDefinition(RailwaySyntaxError): pass
 # tree can be either the AST module or the interpreter module, creating
 # a pure syntax tree or an interpreter tree (with eval methods) respectively
 def generate_parsing_function(tree):
+    if parsing_func_cache:
+        return parsing_func_cache[0]
     pgen = ParserGenerator(
         [rule.name for rule in lexing.lexer.rules],
         precedence=[
@@ -71,17 +75,53 @@ def generate_parsing_function(tree):
 
     @pgen.production('filelevelitem : function')
     @pgen.production('filelevelitem : global')
+    @pgen.production('filelevelitem : import')
     def file_level_item(state, p):
         return p[0]
 
+    # -------------------- import -------------------- #
+
+    @pgen.production('import : IMPORT string NEWLINE')
+    @pgen.production('import : IMPORT string AS NEWLINE')
+    @pgen.production('import : IMPORT string AS NAME NEWLINE')
+    def _import(state, p):
+        filename = p[1]
+        if filename[-5:] != '.rail':
+            filename += '.rail'
+        if len(p) == 3:
+            alias = os_split(filename)[-1][:-5]
+        elif len(p) == 4:
+            alias = ''
+        else:
+            alias = p[-2].getstr()
+        return tree.Import(filename=filename, alias=alias)
+
     # -------------------- global declaration -------------------- #
 
+    """
     @pgen.production('global : let NEWLINE')
     def _global(state, p):
         if p[0].lookup.mononame:
             raise RailwayIllegalMono(f'GLobal variable "{p[0].lookup.name}" is '
                                      'declared mono')
         return p[0]
+    """
+
+    @pgen.production('global : GLOBAL lookup NEWLINE')
+    @pgen.production('global : GLOBAL lookup ASSIGN expression NEWLINE')
+    def _global(state, p):
+        rhs = tree.Fraction(0) if len(p) == 3 else p[-2]
+        lookup = p[1]
+        if lookup.index:
+            raise RailwayUnexpectedIndex('Indices on LHS when declaring global '
+                                         f'"{lookup.name}"')
+        if rhs.uses_var(lookup.name):
+            raise RailwayCircularDefinition(f'Variable "{lookup.name}" is used '
+                                            'during its own initialisation')
+        if lookup.mononame:
+            raise RailwayIllegalMono(
+                f'Global variable "{lookup.name}" cannot be mono')
+        return tree.Global(lookup, rhs)
 
     # -------------------- function declaration -------------------- #
 
@@ -631,8 +671,28 @@ def generate_parsing_function(tree):
 
     _parser = pgen.build()
 
-    def parse(tokens, filename):
-        state = ParserState(filename=filename, parser=_parser)
-        return _parser.parse(tokens, state=state)
+    def parse(filename):
+        with open(filename, 'r') as f:
+            source = f.read() + '\n'
+        tokens = lexing.lexer.lex(source)
+        try:
+            state = ParserState(filename=filename, parser=_parser)
+            return _parser.parse(tokens, state=state)
+        except RailwaySyntaxError as e:
+            sys.exit('\nSyntax Error of type ' +
+                     type(e).__name__ + ':\n' +
+                     e.args[0])
+        except RplyParsingError as e:
+            sourcepos = e.getsourcepos()
+            if sourcepos is not None:
+                lineno = e.getsourcepos().lineno
+                marker = ' ' * (e.getsourcepos().colno - 1) + '^'
+                sys.exit(
+                    f'\nParsing Error\n File: {filename}\n Line: {lineno}\n\n' +
+                    source.splitlines()[lineno - 1] + '\n' +
+                    marker)
+            sys.exit(f'Parsing error {e}')
 
+    parsing_func_cache.append(parse)
     return parse
+

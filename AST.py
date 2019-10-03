@@ -282,6 +282,22 @@ class PrintLn(StatementNode):
         self.targets = targets
 
 
+class Global:
+    __slots__ = ["lookup", "rhs"]
+
+    def __init__(self, lookup, rhs):
+        self.lookup = lookup
+        self.rhs = rhs
+
+
+class Import:
+    __slots__ = ["filename", "alias"]
+
+    def __init__(self, filename, alias):
+        self.filename = filename
+        self.alias = alias
+
+
 class CallBlock:
     __slots__ = ["isuncall", "name", "numthreads", "borrowed_params"]
 
