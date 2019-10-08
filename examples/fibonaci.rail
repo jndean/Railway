@@ -1,0 +1,38 @@
+$ USAGE:
+$   railway fibonacci.rail -n 10
+
+func main(argv)()
+  pop N <= argv
+
+  do
+    let n = N
+    let space
+    let result
+    call Fib(n, space, result)
+  yield
+    println("fib(", N,") = ", result)
+  undo
+
+  do
+    let result = 1597
+    let space = 987
+    let n = 1
+    uncall Fib(n, space, result)
+  yield
+    println("inverse_fib( 1597, 987 ) =", n)
+  undo
+
+return ()
+
+
+func Fib(n, space, result)()
+  n -= 1
+  if (n==1)
+    space += 1
+    result += 1
+  else
+    call Fib(n, space, result)
+    space += result
+    swap space <=> result
+  fi(space==result)
+return ()

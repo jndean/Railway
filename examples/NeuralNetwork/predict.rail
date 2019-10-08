@@ -1,7 +1,9 @@
+$ USAGE:
+$   railway predict.rail -f32 W1.float32 -f32 W2.float32 -f32 images/1_two.img
 
-let img_res = 28 * 28
-let num_hidden = 100
-let num_classes = 10
+global img_res = 28 * 28
+global num_hidden = 100
+global num_classes = 10
 
 
 func main(argv)()
