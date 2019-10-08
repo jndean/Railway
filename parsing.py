@@ -464,6 +464,33 @@ def generate_parsing_function(tree):
         return tree.Pop(src_lookup=src, dst_lookup=dst, ismono=ismono,
                         modreverse=modreverse)
 
+    @pgen.production('pop : SWAP lookup LRARROW lookup')
+    def swap(state, p):
+        _, lhs, arrow, rhs = p
+        ismono = lhs.hasmono or rhs.hasmono
+        modreverse = not (lhs.mononame and rhs.mononame)
+        if ismono and modreverse:
+            raise RailwayIllegalMono(f'Using mono information to swap non-mono '
+                                     f'"{lhs.name}[?] <=> {rhs.name}[?]"')
+        if (any(idx.uses_var(rhs.name) for idx in lhs.index) or
+           any(idx.uses_var(lhs.name) for idx in rhs.index)):
+            raise RailwaySelfmodification(
+               'Swap uses information from one side as an index on the other '
+               f'"{lhs.name}[?] <=> {rhs.name}[?]"')
+        if lhs.index:
+            *lhs_idx, lhs_tail = lhs.index
+            lhs.index = lhs_idx
+        else:
+            lhs_tail = None
+        if rhs.index:
+            *rhs_idx, rhs_tail = rhs.index
+            rhs.index = rhs_idx
+        else:
+            rhs_tail = None
+        return tree.Swap(lhs_lookup=lhs, rhs_lookup=rhs,
+                         lhs_idx=lhs_tail, rhs_idx=rhs_tail,
+                         ismono=ismono, modreverse=modreverse)
+
     # --------------------- promote --------------------- #
 
     @pgen.production('promote : PROMOTE lookup RARROW lookup')
@@ -644,6 +671,8 @@ def generate_parsing_function(tree):
         index = p.pop() if p else tuple()
         mononame = (name[0] == '.')
         hasmono = mononame or any(idx.hasmono for idx in index)
+        if any(idx.uses_var(name) for idx in index):
+            raise RailwaySelfmodification(f'Using "{name}" to index itself')
         return tree.Lookup(name=name, index=index,
                            mononame=mononame, hasmono=hasmono)
 

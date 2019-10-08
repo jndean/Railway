@@ -188,12 +188,14 @@ class Pop(StatementNode):
 
 
 class Swap(StatementNode):
-    __slots__ = ["src_lookup", "dst_lookup"]
+    __slots__ = ["lhs_lookup", "rhs_lookup", "lhs_idx", "rhs_idx"]
 
-    def __init__(self, src_lookup, dst_lookup, **kwargs):
+    def __init__(self, lhs_lookup, rhs_lookup, lhs_idx, rhs_idx, **kwargs):
         super().__init__(**kwargs)
-        self.src_lookup = src_lookup
-        self.dst_lookup = dst_lookup
+        self.lhs_lookup = lhs_lookup
+        self.rhs_lookup = rhs_lookup
+        self.lhs_idx = lhs_idx
+        self.rhs_idx = rhs_idx
 
 
 class Modop(StatementNode):

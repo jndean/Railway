@@ -121,7 +121,6 @@ class Module(AST.Module):
         for line in self.global_lines:
             line.eval(scope=scope)
         scope.assign('argv', argv)
-        print(scope.functions)
         main = self.functions.get('main', self.functions.get('.main', None))
         if main is None:
             raise RailwayUndefinedFunction(
@@ -525,6 +524,47 @@ def pop_eval(scope, src_lookup, dst_lookup):
     scope.assign(name=dst_lookup.name, var=var)
 
 
+class Swap(AST.Swap):
+    def eval(self, scope, backwards):
+        if self.lhs_idx is None:
+            lhs_mem = scope.lookup(self.lhs_lookup.name).memory
+            lhs_index = 0
+        else:
+            lhs_mem = self.lhs_lookup.eval(scope=scope)
+            lhs_index = self.lhs_idx.eval(scope=scope)
+            if isinstance(lhs_mem, Fraction):
+                raise RailwayTypeError(
+                    f'Indexing into Fraction in "{self.lhs_lookup.name}[?]" '
+                    f'during swap with "{self.rhs_lookup.name}"', scope=scope)
+        if self.rhs_idx is None:
+            rhs_mem = scope.lookup(self.rhs_lookup.name).memory
+            rhs_index = 0
+        else:
+            rhs_mem = self.rhs_lookup.eval(scope=scope)
+            rhs_index = self.rhs_idx.eval(scope=scope)
+            if isinstance(rhs_mem, Fraction):
+                raise RailwayTypeError(
+                    f'Indexing into Fraction in "{self.rhs_lookup.name}[?]" '
+                    f'during swap with "{self.lhs_lookup.name}"', scope=scope)
+        if isinstance(lhs_index, list) or isinstance(rhs_index, list):
+            raise RailwayTypeError(
+                f'Using array as index during swap of "{self.lhs_lookup.name}" '
+                f'and "{self.rhs_lookup.name}"', scope=scope)
+        lhs_index, rhs_index = int(lhs_index), int(rhs_index)
+        if lhs_index < -len(lhs_mem) or lhs_index >= len(lhs_mem):
+            raise RailwayIndexError('Out of bounds access '
+                                    f'"{self.lhs_lookup.name}[?][{lhs_index}]"',
+                                    scope=scope)
+        if rhs_index < -len(rhs_mem) or rhs_index >= len(rhs_mem):
+            raise RailwayIndexError('Out of bounds access '
+                                    f'"{self.rhs_lookup.name}[?][{rhs_index}]"',
+                                    scope=scope)
+        tmp = lhs_mem[lhs_index]
+        lhs_mem[lhs_index] = rhs_mem[rhs_index]
+        rhs_mem[rhs_index] = tmp
+        return backwards
+
+
 # ----------------------- AST - Promote -----------------------#
 
 class Promote(AST.Promote):
@@ -643,13 +683,13 @@ class ArrayRange(AST.ArrayRange):
                 f'Step value for array range must be non-zero', scope=scope)
         out = []
         if step > 0:
-            while val < self.stop:
+            while val < stop:
                 out.append(Fraction(val))
-                val += self.step
+                val += step
         else:
-            while val > self.stop:
+            while val > stop:
                 out.append(Fraction(val))
-                val += self.step
+                val += step
         return out
 
     def lazy_eval(self, scope, backwards):
@@ -768,7 +808,11 @@ class Lookup(AST.Lookup):
     def eval(self, scope):
         var = scope.lookup(self.name)
         if var.isarray:  # Arrays
-            index = [int(idx.eval(scope=scope)) for idx in self.index]
+            try:
+                index = [int(idx.eval(scope=scope)) for idx in self.index]
+            except TypeError:
+                raise RailwayTypeError(
+                    f'Using array as index into "{self.name}"', scope=scope)
             output = var.memory
             try:
                 for idx in index:
