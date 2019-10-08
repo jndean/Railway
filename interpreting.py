@@ -594,6 +594,9 @@ class Modop(AST.Modop):
             return backwards
         op = self.inv_op if backwards else self.op
         lhs, rhs = self.lookup.eval(scope), self.expr.eval(scope)
+        if isinstance(lhs, list) or isinstance(rhs, list):
+            raise RailwayValueError(f'Modification operation "{self.name}" does'
+                                    ' not support arrays', scope=scope)
         try:
             result = Fraction(op(lhs, rhs))
         except ZeroDivisionError:
