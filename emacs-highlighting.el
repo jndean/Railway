@@ -7,7 +7,7 @@
 			   "pool" "for" "rof" "try" "catch" "yrt" "in"))
             (x-types '("let" "unlet"))
             (x-constants '("main"))
-            (x-events '("func" "return"))
+            (x-events '("import" "global" "func" "return"))
             (x-functions '("print" "call" "uncall" "push" "pop" "swap"))
 
             (x-keywords-regexp (regexp-opt x-keywords 'words))
