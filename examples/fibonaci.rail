@@ -22,6 +22,7 @@ func main(argv)()
     println("inverse_fib( 1597, 987 ) =", n)
   undo
 
+  push N => argv
 return ()
 
 

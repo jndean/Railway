@@ -1,4 +1,5 @@
 from copy import deepcopy
+from threading import Thread
 
 import AST
 from parsing import generate_parsing_function
@@ -182,7 +183,15 @@ class Function(AST.Function):
             raise RailwayLeakedInformation(
                 f'Variable "{leaks.pop()}" is still in scope of '
                 f'function "{self.name}" at the end of a (un)call', scope=scope)
-        return [scope.lookup(x.name, globals=False) for x in out_params]
+        results = []
+        for param in out_params:
+            var = scope.lookup(param.name, globals=False)
+            results.append(var)
+            if var.isborrowed:
+                raise RailwayReferenceOwnership(
+                    f'Function "{self.name}" returns a borrowed reference to "'
+                    f'{param.name}"', scope=scope)
+        return results
 
 
 class CallChain(AST.CallChain):
@@ -199,7 +208,9 @@ class CallChain(AST.CallChain):
                     scope=scope)
             scope.remove(p.name)
         for call in reversed(self.calls) if backwards else self.calls:
-            variables = _eval_call(call, backwards, variables, scope)
+            eval_method = (_eval_call if call.num_threads is None else
+                           _eval_call_parallel)
+            variables = eval_method(call, backwards, variables, scope)
         params = self.in_params if backwards else self.out_params
         if len(params) != len(variables):
             raise RailwayLeakedInformation(
@@ -225,10 +236,9 @@ def _eval_call(call, backwards, variables, scope):
             f'{"Unc" if uncall else "C"}alling function "{call.name}" with '
             f'{len(variables)} stolen references when it expects '
             f'{len(params)}', scope=scope)
-    else:
-        for var, param in zip(variables, params):
-            _check_mono_match(var, param, uncall, call.name, scope)
-            subscope.assign(param.name, var)
+    for var, param in zip(variables, params):
+        _check_mono_match(var, param, uncall, call.name, scope)
+        subscope.assign(param.name, var)
     for call_param, func_param in zip(call.borrowed_params,
                                       function.borrowed_params):
         var = scope.lookup(call_param.name)
@@ -237,6 +247,83 @@ def _eval_call(call, backwards, variables, scope):
                            isborrowed=True, isarray=var.isarray)
         subscope.assign(func_param.name, new_var)
     return function.eval(scope=subscope, backwards=uncall)
+
+
+def _eval_call_parallel(call, backwards, variables, scope):
+    function = scope.lookup_func(call.name)
+    uncall = call.isuncall ^ backwards
+    params = function.out_params if uncall else function.in_params
+    num_threads = _get_num_threads(call, scope)
+    split_vars = _split_variables(
+        variables, params, num_threads, uncall, call, scope)
+    subscopes, threads, results = [], [], [None] * num_threads
+    for t_num in range(num_threads):
+        subscope = Scope(
+            parent=scope, name=call.name, functions=scope.functions, locals={},
+            monos={}, globals=scope.globals)
+        for var, param in zip(split_vars[t_num], params):
+            _check_mono_match(var, param, uncall, call.name, scope)
+            subscope.assign(param.name, var)
+        for call_param, func_param in zip(call.borrowed_params,
+                                          function.borrowed_params):
+            var = scope.lookup(call_param.name)
+            _check_mono_match(var, func_param, uncall, call.name, scope)
+            new_var = Variable(memory=var.memory, ismono=var.ismono,
+                               isborrowed=True, isarray=var.isarray)
+            subscope.assign(func_param.name, new_var)
+        subscopes.append(subscope)
+        thread = Thread(target=_thread_worker,
+                        args=(function, subscope, uncall, results, t_num))
+        thread.start()
+        threads.append(thread)
+    all(thread.join() is None for thread in threads)
+    return [Variable(
+        memory=[var.memory if var.isarray else var.memory[0] for var in vars],
+        ismono=vars[0].ismono, isborrowed=False, isarray=True)
+                     for vars in zip(*results)]
+
+
+def _thread_worker(function, scope, backwards, results, t_num):
+    result = function.eval(scope=scope, backwards=backwards)
+    results[t_num] = result
+
+
+def _split_variables(variables, params, num_threads, isuncall, call, scope):
+    if len(variables) != len(params):
+        raise RailwayCallError(
+            f'{"Unc" if isuncall else "C"}alling function "{call.name}" with '
+            f'{len(variables)} stolen references when it expects '
+            f'{len(params)}', scope=scope)
+    for i, (var, param) in enumerate(zip(variables, params)):
+        if len(var.memory) != num_threads:
+            raise RailwayValueError(
+                f'Function "{call.name}" called with {num_threads} threads, '
+                'meaning all stolen references should be arrays of length '
+                f'{num_threads}. Input {i+1} is length {len(var.memory)}',
+                scope=scope)
+    output = []
+    for i in range(num_threads):
+        row = []
+        for var in variables:
+            value = var.memory[i]
+            isarray = isinstance(value, list)
+            memory = value if isarray else [value]
+            row.append(Variable(memory=memory, ismono=var.ismono,
+                                isborrowed=False, isarray=isarray))
+        output.append(row)
+    return output
+
+
+def _get_num_threads(call, scope):
+    num_threads = call.num_threads.eval(scope=scope)
+    if isinstance(num_threads, list):
+        raise RailwayTypeError('Got an array in place of numthreads for call '
+                               f'to "{call.name}"', scope=scope)
+    num_threads = int(num_threads)
+    if num_threads <= 0:
+        raise RailwayValueError(
+            f'Calling "{call.name}" with {num_threads} threads', scope=scope)
+    return num_threads
 
 
 def _check_mono_match(variable, parameter, isuncall, fname, scope):

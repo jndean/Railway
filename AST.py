@@ -301,12 +301,12 @@ class Import:
 
 
 class CallBlock:
-    __slots__ = ["isuncall", "name", "numthreads", "borrowed_params"]
+    __slots__ = ["isuncall", "name", "num_threads", "borrowed_params"]
 
-    def __init__(self, isuncall, name, numthreads, borrowed_params):
+    def __init__(self, isuncall, name, num_threads, borrowed_params):
         self.isuncall = isuncall
         self.name = name
-        self.numthreads = numthreads
+        self.num_threads = num_threads
         self.borrowed_params = borrowed_params
 
 

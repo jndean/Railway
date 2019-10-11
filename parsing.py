@@ -162,14 +162,17 @@ def generate_parsing_function(tree):
     @pgen.production('callblock : CALL name parameters')
     @pgen.production('callblock : UNCALL name parameters')
     @pgen.production('callblock : CALL name LBRACK RBRACK parameters')
+    @pgen.production('callblock : UNCALL name LBRACK RBRACK parameters')
+    @pgen.production('callblock : CALL name LBRACK expression RBRACK'
+                     '            parameters')
     @pgen.production('callblock : UNCALL name LBRACK expression RBRACK'
                      '            parameters')
     def callblock(state, p):
         isuncall = (p[0].gettokentype() == 'UNCALL')
         name = p[1]
         borrowed_params = p[-1]
-        numthreads = p[3] if len(p) == 6 else tree.Fraction(1)
-        return tree.CallBlock(isuncall, name, numthreads, borrowed_params)
+        num_threads = p[3] if len(p) == 6 else None
+        return tree.CallBlock(isuncall, name, num_threads, borrowed_params)
 
     @pgen.production('callchain_right : callblock')
     @pgen.production('callchain_right : callblock GREAT callchain_right')
