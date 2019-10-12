@@ -1,4 +1,4 @@
-from collections import namedtuple
+from collections import namedtuple, Counter
 from os.path import split as os_split
 import sys
 
@@ -25,6 +25,7 @@ class RailwayTypeError(RailwaySyntaxError): pass
 class RailwayCircularDefinition(RailwaySyntaxError): pass
 class RailwayUnexpectedIndex(RailwaySyntaxError): pass
 class RailwayDuplicateDefinition(RailwaySyntaxError): pass
+class RailwayNameConflict(RailwaySyntaxError): pass
 
 
 # ------------------- main parser generation method ------------------- #
@@ -138,6 +139,16 @@ def generate_parsing_function(tree):
                 raise RailwayExpectedMono(f'Function "{name}" modifies no non-'
                                           'mono variables, so should be marked'
                                           ' as mono')
+        in_counts = Counter(p.name for p in borrowed_params + in_params)
+        out_counts = Counter(p.name for p in out_params)
+        if len(in_counts) != len(borrowed_params) + len(in_params):
+            dup, count = in_counts.most_common(1)[0]
+            raise RailwayNameConflict(f'Parameter "{dup}" appears {count} times'
+                                      f' in the signature of function "{name}"')
+        if len(out_counts) != len(out_params):
+            dup, count = out_counts.most_common(1)[0]
+            raise RailwayNameConflict(f'Parameter "{dup}" is returned {count} '
+                                      f'times by function "{name}"')
         return tree.Function(name, lines, modreverse, borrowed_params,
                              in_params, out_params)
 
@@ -172,6 +183,11 @@ def generate_parsing_function(tree):
         name = p[1]
         borrowed_params = p[-1]
         num_threads = p[3] if len(p) == 6 else None
+        param_counts = Counter(p.name for p in borrowed_params)
+        if len(param_counts) != len(borrowed_params):
+            dup, count = param_counts.most_common(1)[0]
+            raise RailwayNameConflict(f'(Un)call to function "{name}" borrows '
+                                      f'parameter "{dup}" {count} times')
         return tree.CallBlock(isuncall, name, num_threads, borrowed_params)
 
     @pgen.production('callchain_right : callblock')

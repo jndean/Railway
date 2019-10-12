@@ -236,6 +236,11 @@ def _eval_call(call, backwards, variables, scope):
             f'{"Unc" if uncall else "C"}alling function "{call.name}" with '
             f'{len(variables)} stolen references when it expects '
             f'{len(params)}', scope=scope)
+    if len(call.borrowed_params) != len(function.borrowed_params):
+        raise RailwayCallError(
+            f'{"Unc" if uncall else "C"}alling function "{call.name}" with '
+            f'{len(call.borrowed_params)} borrowed references when it expects '
+            f'{len(function.borrowed_params)}', scope=scope)
     for var, param in zip(variables, params):
         _check_mono_match(var, param, uncall, call.name, scope)
         subscope.assign(param.name, var)
@@ -257,6 +262,11 @@ def _eval_call_parallel(call, backwards, variables, scope):
     split_vars = _split_variables(
         variables, params, num_threads, uncall, call, scope)
     subscopes, threads, results = [], [], [None] * num_threads
+    if len(call.borrowed_params) != len(function.borrowed_params):
+        raise RailwayCallError(
+            f'{"Unc" if uncall else "C"}alling function "{call.name}" with '
+            f'{len(call.borrowed_params)} borrowed references when it expects '
+            f'{len(function.borrowed_params)}', scope=scope)
     for t_num in range(num_threads):
         subscope = Scope(
             parent=scope, name=call.name, functions=scope.functions, locals={},
