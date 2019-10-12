@@ -677,10 +677,6 @@ def generate_parsing_function(tree):
             return tree.Fraction(uniop(arg))
         return tree.Uniop(uniop, arg, name, hasmono=arg.hasmono)
 
-    # @pgen.production('expression : arrayliteral')
-    # def expression_arrayliteral(state, p):
-    #     return p[0]
-
     # -------------------- lookup -------------------- #
 
     @pgen.production('lookup : name')
@@ -701,6 +697,16 @@ def generate_parsing_function(tree):
         if len(p) == 4:
             return (p[1],) + p[3]
         return p[1],
+
+    # -------------------- threadnum -------------------- #
+
+    @pgen.production('threadnum : THREADNUM')
+    def varfuncname_name(state, p):
+        return tree.ThreadNum(hasmono=False)
+
+    @pgen.production('expression : threadnum')
+    def expression_threadnum(state, p):
+        return p[0]
 
     # -------------------- names -------------------- #
 

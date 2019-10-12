@@ -142,6 +142,16 @@ class ArrayTensor(ExpressionNode):
                 or self.fill_expr.uses_var(name))
 
 
+class ThreadNum(ExpressionNode):
+    __slots__ = []
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def uses_var(self, name):
+        return False
+
+
 class Let(StatementNode):
     __slots__ = ["lookup", "rhs"]
 

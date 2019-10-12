@@ -37,15 +37,19 @@ class RailwayImportError(RailwayException): pass
 # -------------------- Interpreter-Only Objects ---------------------- #
 
 class Scope:
-    __slots__ = ['parent', 'name', 'functions', 'locals', 'monos', 'globals']
+    __slots__ = ['parent', 'name', 'functions', 'locals',
+                 'monos', 'globals', 'thread_num']
 
-    def __init__(self, parent, name, locals, monos, globals, functions):
+    def __init__(self, parent, name, locals, monos, globals, functions,
+                 thread_num=None):
         self.parent = parent
         self.name = name
         self.functions = functions
         self.locals = locals if locals is not None else {}
         self.monos = monos if monos is not None else {}
         self.globals = globals if globals is not None else {}
+        self.thread_num = (thread_num if thread_num is not None
+                           else parent.thread_num)
 
     def lookup(self, name, locals=True, globals=True, monos=True):
         if monos and name in self.monos:
@@ -118,7 +122,7 @@ class Module(AST.Module):
         argv = Variable(memory=argv, ismono=False,
                         isborrowed=False, isarray=True)
         scope = Scope(parent=None, name='main', functions=self.functions,
-                      locals={}, monos={}, globals={})
+                      locals={}, monos={}, globals={}, thread_num=Fraction(0))
         for line in self.global_lines:
             line.eval(scope=scope)
         scope.assign('argv', argv)
@@ -270,7 +274,7 @@ def _eval_call_parallel(call, backwards, variables, scope):
     for t_num in range(num_threads):
         subscope = Scope(
             parent=scope, name=call.name, functions=scope.functions, locals={},
-            monos={}, globals=scope.globals)
+            monos={}, globals=scope.globals, thread_num=Fraction(t_num))
         for var, param in zip(split_vars[t_num], params):
             _check_mono_match(var, param, uncall, call.name, scope)
             subscope.assign(param.name, var)
@@ -536,10 +540,6 @@ class If(AST.If):
         enter_result = bool(enter_expr.eval(scope))
         lines = self.lines if enter_result else self.else_lines
         backwards = _run_lines(lines, scope, backwards)
-        # lines = reversed(lines) if backwards else lines
-        # new_backwards = _run_lines(lines, scope, backwards)
-        # for line in reversed(lines) if backwards else lines:
-        #     line.eval(scope, backwards)
         exit_expr = self.enter_expr if backwards else self.exit_expr
         if not self.ismono:
             exit_result = bool(exit_expr.eval(scope))
@@ -608,7 +608,7 @@ def pop_eval(scope, src_lookup, dst_lookup):
     except IndexError:
         raise RailwayIndexError(
             f'Popping from empty array "{src_lookup.name}" (or an '
-            'element therin)',
+            'element therein)',
             scope=scope)
     isarray = isinstance(contents, list)
     var = Variable(memory=contents if isarray else [contents],
@@ -955,6 +955,11 @@ class Lookup(AST.Lookup):
                     scope=scope)
             index = 0
         memory[index] = value
+
+
+class ThreadNum(AST.ThreadNum):
+    def eval(self, scope):
+        return scope.thread_num
 
 
 class Fraction(AST.Fraction):

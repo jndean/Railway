@@ -79,7 +79,10 @@ expression = number
            | '(' expression ')'
            | array_literal
            | array_generator
-           | array_tensor ;
+           | array_tensor
+	   | threadnum ;
+
+threadnum = "TID"
 
 binary_op = "+" | "-" | "*" | "/" | "//" | "**" | "%" |
             "^" | "|" | "&" | "<=" | ">=" | "!=" | "==" |

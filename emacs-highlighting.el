@@ -6,9 +6,9 @@
 	     (x-keywords '("if" "else" "fi" "do" "yield" "undo" "loop"
 			   "pool" "for" "rof" "try" "catch" "yrt" "in"))
             (x-types '("let" "unlet"))
-            (x-constants '("main"))
-            (x-events '("import" "global" "func" "return"))
-            (x-functions '("print" "call" "uncall" "push" "pop" "swap"))
+            (x-constants '("main" "TID"))
+            (x-events '("import" "global" "func" "return" "call" "uncall"))
+            (x-functions '("print" "push" "pop" "swap"))
 
             (x-keywords-regexp (regexp-opt x-keywords 'words))
             (x-types-regexp (regexp-opt x-types 'words))

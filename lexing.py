@@ -83,6 +83,7 @@ lg.add("COMMA", r"\,")
 lg.add("MONO", r"\.")
 lg.add("LEN", r"#")
 lg.add("NOT", r"!")
+lg.add("THREADNUM", r"TID")
 
 lg.add("NUMBER", r"\d+(\/\d+)?")
 lg.add("NAME", r"[a-zA-Z_][a-zA-Z0-9_.]*")
@@ -97,6 +98,7 @@ lg.ignore(r"[ \t\r\f\v]+")
 lg.ignore(r"\$[^\n]*\n+")
 
 lexer = lg.build()
+
 
 if __name__ == "__main__":
     with open(sys.argv[1], 'r') as f:
