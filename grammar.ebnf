@@ -10,8 +10,8 @@ function = "func" name "(" [name {","  name}] ")"
 
 statement = [let_stmt | unlet_stmt | if_stmt | loop_stmt | for_stmt |
              push_stmt | pop_stmt | swap_stmt | do_stmt | mod_stmt |
-             try_stmt | catch_stmt | call_stmt | print_stmt | promote_stmt]
-             "\n" ;
+             try_stmt | catch_stmt | call_stmt | print_stmt | promote_stmt |
+	     barrier_stmt] "\n" ;
 
 let_stmt = "let" lookup "=" expression ;
 
@@ -42,13 +42,15 @@ do_stmt = "do" "\n"
           {yieldable_stmt}
           "undo" ;
 
+barrier_stmt = "barrier" string ;
+
 try_stmt = "try" "(" basic_name "in" expression ")" "\n"
            {statement}
            "yrt" ;
 
-promote_stmt = "promote" name ;
-
 catch_stmt = "catch" "(" expression ")" ;
+
+promote_stmt = "promote" name ;
 
 mod_stmt = lookup modification_op expression ;
 

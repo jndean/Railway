@@ -266,6 +266,7 @@ def generate_parsing_function(tree):
     @pgen.production('stmt : promote')
     @pgen.production('stmt : print')
     @pgen.production('stmt : println')
+    @pgen.production('stmt : barrier')
     @pgen.production('statement : stmt NEWLINE')
     def statement(state, p):
         return p[0]
@@ -321,6 +322,12 @@ def generate_parsing_function(tree):
         if len(p) == 1:
             return [p[0]]
         return [p[0]] + p[2]
+
+    # -------------------- print -------------------- #
+
+    @pgen.production('barrier : BARRIER name')
+    def barrier(state, p):
+        return tree.Barrier(name=p[1], ismono=False, modreverse=False)
 
     # -------------------- modification -------------------- #
 

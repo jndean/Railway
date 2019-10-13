@@ -1,5 +1,6 @@
 from copy import deepcopy
-from threading import Thread
+from threading import Thread, Lock
+from threading import Barrier as pyBarrier
 
 import AST
 from parsing import generate_parsing_function
@@ -38,10 +39,10 @@ class RailwayImportError(RailwayException): pass
 
 class Scope:
     __slots__ = ['parent', 'name', 'functions', 'locals',
-                 'monos', 'globals', 'thread_num']
+                 'monos', 'globals', 'thread_num', 'thread_manager']
 
-    def __init__(self, parent, name, locals, monos, globals, functions,
-                 thread_num=None):
+    def __init__(self, parent, name, functions, locals={}, monos={},
+                 globals={}, thread_num=None, thread_manager=None):
         self.parent = parent
         self.name = name
         self.functions = functions
@@ -50,6 +51,10 @@ class Scope:
         self.globals = globals if globals is not None else {}
         self.thread_num = (thread_num if thread_num is not None
                            else parent.thread_num)
+        if thread_manager is None and self.thread_num != -1:
+            self.thread_manager = parent.thread_manager
+        else:
+            self.thread_manager = thread_manager
 
     def lookup(self, name, locals=True, globals=True, monos=True):
         if monos and name in self.monos:
@@ -104,6 +109,11 @@ class Scope:
                 scope=self)
         self.globals[name] = var
 
+    def lookup_barrier(self, name):
+        if self.thread_manager is None:
+            return None
+        return self.thread_manager.get_barrier(name)
+
 
 class Variable:
     __slots__ = ['memory', 'ismono', 'isborrowed', 'isarray']
@@ -115,6 +125,22 @@ class Variable:
         self.isarray = isarray
 
 
+class ThreadManager:
+
+    def __init__(self, num_threads):
+        self.num_threads = num_threads
+        self.barriers = {}
+        self.mutexes = {}
+        self.lock = Lock()
+
+    def get_barrier(self, name):
+        self.lock.acquire()
+        if name not in self.barriers:
+            self.barriers[name] = pyBarrier(self.num_threads)
+        self.lock.release()
+        return self.barriers[name]
+
+
 # ------------------------- AST Module level --------------------------#
 
 class Module(AST.Module):
@@ -122,7 +148,7 @@ class Module(AST.Module):
         argv = Variable(memory=argv, ismono=False,
                         isborrowed=False, isarray=True)
         scope = Scope(parent=None, name='main', functions=self.functions,
-                      locals={}, monos={}, globals={}, thread_num=Fraction(0))
+                      locals={}, monos={}, globals={}, thread_num=Fraction(-1))
         for line in self.global_lines:
             line.eval(scope=scope)
         scope.assign('argv', argv)
@@ -271,10 +297,14 @@ def _eval_call_parallel(call, backwards, variables, scope):
             f'{"Unc" if uncall else "C"}alling function "{call.name}" with '
             f'{len(call.borrowed_params)} borrowed references when it expects '
             f'{len(function.borrowed_params)}', scope=scope)
+    thread_manager = ThreadManager(num_threads)
     for t_num in range(num_threads):
-        subscope = Scope(
-            parent=scope, name=call.name, functions=scope.functions, locals={},
-            monos={}, globals=scope.globals, thread_num=Fraction(t_num))
+        subscope = Scope(parent=scope,
+                         name=call.name,
+                         functions=scope.functions,
+                         globals=scope.globals,
+                         thread_num=Fraction(t_num),
+                         thread_manager=thread_manager)
         for var, param in zip(split_vars[t_num], params):
             _check_mono_match(var, param, uncall, call.name, scope)
             subscope.assign(param.name, var)
@@ -439,6 +469,15 @@ def _stringify(memory):
     if isinstance(memory, Fraction):
         return str(memory)
     return '[' + ', '.join(_stringify(elt) for elt in memory) + ']'
+
+
+# -------------------- AST - Barrier, Mutex --------------------#
+
+class Barrier(AST.Barrier):
+    def eval(self, scope, backwards):
+        barrier = scope.get_barrier(self.name)
+        barrier.wait()
+        return backwards
 
 
 # -------------------- AST - Do-Yield-Undo --------------------#

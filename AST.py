@@ -260,6 +260,14 @@ class DoUndo(StatementNode):
         self.yield_lines = yield_lines
 
 
+class Barrier(StatementNode):
+    __slots__ = ["name"]
+
+    def __init__(self, name, **kwargs):
+        super().__init__(**kwargs)
+        self.name = name
+
+
 class Try(StatementNode):
     __slots__ = ["lookup", "iterator", "lines"]
 
