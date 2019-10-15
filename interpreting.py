@@ -41,8 +41,8 @@ class Scope:
     __slots__ = ['parent', 'name', 'functions', 'locals',
                  'monos', 'globals', 'thread_num', 'thread_manager']
 
-    def __init__(self, parent, name, functions, locals={}, monos={},
-                 globals={}, thread_num=None, thread_manager=None):
+    def __init__(self, parent, name, functions, locals=None, monos=None,
+                 globals=None, thread_num=None, thread_manager=None):
         self.parent = parent
         self.name = name
         self.functions = functions
@@ -475,7 +475,7 @@ def _stringify(memory):
 
 class Barrier(AST.Barrier):
     def eval(self, scope, backwards):
-        barrier = scope.get_barrier(self.name)
+        barrier = scope.lookup_barrier(self.name)
         barrier.wait()
         return backwards
 

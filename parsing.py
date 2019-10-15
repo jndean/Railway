@@ -325,7 +325,7 @@ def generate_parsing_function(tree):
 
     # -------------------- print -------------------- #
 
-    @pgen.production('barrier : BARRIER name')
+    @pgen.production('barrier : BARRIER string')
     def barrier(state, p):
         return tree.Barrier(name=p[1], ismono=False, modreverse=False)
 
