@@ -13,7 +13,10 @@ class RailwayException(RuntimeError):
         self.message = message
         self.stack = []
         while scope is not None:
-            self.stack.append(scope.name)
+            name, tid = scope.name, int(scope.thread_num)
+            if tid != -1:
+                name += f" (TID:{tid})"
+            self.stack.append(name)
             scope = scope.parent
 
 
@@ -363,7 +366,10 @@ def _eval_call_parallel(call, backwards, variables, scope):
                         args=(function, subscope, uncall, results, t_num))
         thread.start()
         threads.append(thread)
-    all(thread.join() is None for thread in threads)
+    for i, thread in enumerate(threads):
+        thread.join()
+        if isinstance(results[i], Exception):
+            raise results[i]
     return [Variable(
         memory=[var.memory if var.isarray else var.memory[0] for var in vars],
         ismono=vars[0].ismono, isborrowed=False, isarray=True)
@@ -371,8 +377,10 @@ def _eval_call_parallel(call, backwards, variables, scope):
 
 
 def _thread_worker(function, scope, backwards, results, t_num):
-    result = function.eval(scope=scope, backwards=backwards)
-    results[t_num] = result
+    try:
+        results[t_num] = function.eval(scope=scope, backwards=backwards)
+    except Exception as e:
+        results[t_num] = e
 
 
 def _split_variables(variables, params, num_threads, isuncall, call, scope):
