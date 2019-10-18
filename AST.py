@@ -268,6 +268,15 @@ class Barrier(StatementNode):
         self.name = name
 
 
+class Mutex(StatementNode):
+    __slots__ = ["name", "lines"]
+
+    def __init__(self, name, lines, **kwargs):
+        super().__init__(**kwargs)
+        self.name = name
+        self.lines = lines
+
+
 class Try(StatementNode):
     __slots__ = ["lookup", "iterator", "lines"]
 

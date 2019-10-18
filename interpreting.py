@@ -1,5 +1,5 @@
 from copy import deepcopy
-from threading import Thread, Lock
+from threading import Thread, Lock, Event
 from threading import Barrier as pyBarrier
 
 import AST
@@ -33,6 +33,7 @@ class RailwayIllegalMono(RailwayException): pass
 class RailwayExpectedMono(RailwayException): pass
 class RailwayExhaustedTry(RailwayException): pass
 class RailwayImportError(RailwayException): pass
+class RailwayMutexError(RailwayException): pass
 
 
 # -------------------- Interpreter-Only Objects ---------------------- #
@@ -109,10 +110,26 @@ class Scope:
                 scope=self)
         self.globals[name] = var
 
-    def lookup_barrier(self, name):
+    def wait_barrier(self, name):
+        if self.thread_manager is not None:
+            self.thread_manager.get_barrier(name).wait()
+
+    def acquire_mutex(self, name, backwards):
         if self.thread_manager is None:
-            return None
-        return self.thread_manager.get_barrier(name)
+            return None, None, None
+        my_turn, next_turn, mutex = self.thread_manager.get_mutex(
+            name, backwards, self)
+        my_turn.wait()
+        return my_turn, next_turn, mutex
+
+    def release_mutex(self, mutex_tuple):
+        my_turn, next_turn, mutex = mutex_tuple
+        if my_turn is not None:
+            my_turn.clear()
+        if next_turn is not None:
+            next_turn.set()
+        else:
+            mutex.backwards = None
 
 
 class Variable:
@@ -139,6 +156,32 @@ class ThreadManager:
             self.barriers[name] = pyBarrier(self.num_threads)
         self.lock.release()
         return self.barriers[name]
+
+    def get_mutex(self, name, backwards, scope):
+        self.lock.acquire()
+        if name not in self.mutexes:
+            mutex = MutexInstance(
+                turns=[Event() for _ in range(self.num_threads)],
+                backwards=None)
+            self.mutexes[name] = mutex
+        else:
+            mutex = self.mutexes[name]
+        self.lock.release()
+        tid = int(scope.thread_num)
+        if mutex.backwards is None:
+            mutex.backwards = backwards
+            mutex.turns[-1 if backwards else 0].set()
+        elif backwards != mutex.backwards:
+            bw = "backwards" if backwards else "forwards"
+            raise RailwayMutexError(f'Thread {tid} entered mutex "{name}" '
+                                    f'{bw}, counter flow', scope=scope)
+        my_turn = mutex.turns[tid]
+        next_tid = tid + (-1 if backwards else 1)
+        if 0 <= next_tid < self.num_threads:
+            next_turn = mutex.turns[next_tid]
+        else:
+            next_turn = None
+        return my_turn, next_turn, mutex
 
 
 # ------------------------- AST Module level --------------------------#
@@ -475,9 +518,29 @@ def _stringify(memory):
 
 class Barrier(AST.Barrier):
     def eval(self, scope, backwards):
-        barrier = scope.lookup_barrier(self.name)
-        barrier.wait()
+        scope.wait_barrier(self.name)
         return backwards
+
+
+class Mutex(AST.Mutex):
+    def eval(self, scope, backwards):
+        mutex = scope.acquire_mutex(self.name, backwards)
+        new_backwards = _run_lines(self.lines, scope, backwards)
+        scope.release_mutex(mutex)
+        return new_backwards
+
+
+class MutexInstance:
+    """
+    Whilst a 'Mutex' is a node in the Abstract Syntax Tree,
+    a 'MutexInstance' is an object that lives in a function scope
+    and holds mutex state at runtime
+    """
+    __slots__ = ['turns', 'backwards']
+
+    def __init__(self, turns, backwards):
+        self.turns = turns
+        self.backwards = backwards
 
 
 # -------------------- AST - Do-Yield-Undo --------------------#

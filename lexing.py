@@ -38,6 +38,8 @@ lg.add('TO', r"to")
 lg.add('BY', r"by")
 lg.add('TENSOR', r"tensor")
 lg.add('BARRIER', r"barrier")
+lg.add('MUTEX', r"mutex")
+lg.add('XETUM', r"xetum")
 
 lg.add("LRARROW", r"\<\=\>")
 lg.add("LEQ", r"\<\=")

@@ -261,12 +261,14 @@ def generate_parsing_function(tree):
     @pgen.production('stmt : modification')
     @pgen.production('stmt : push')
     @pgen.production('stmt : pop')
+    @pgen.production('stmt : swap')
     @pgen.production('stmt : do')
     @pgen.production('stmt : call_stmt')
     @pgen.production('stmt : promote')
     @pgen.production('stmt : print')
     @pgen.production('stmt : println')
     @pgen.production('stmt : barrier')
+    @pgen.production('stmt : mutex')
     @pgen.production('statement : stmt NEWLINE')
     def statement(state, p):
         return p[0]
@@ -323,11 +325,15 @@ def generate_parsing_function(tree):
             return [p[0]]
         return [p[0]] + p[2]
 
-    # -------------------- print -------------------- #
+    # -------------------- barrier, mutex -------------------- #
 
     @pgen.production('barrier : BARRIER string')
     def barrier(state, p):
         return tree.Barrier(name=p[1], ismono=False, modreverse=False)
+
+    @pgen.production('mutex : MUTEX string NEWLINE statements XETUM')
+    def mutex(state, p):
+        return tree.Mutex(name=p[1], lines=p[3], ismono=False, modreverse=False)
 
     # -------------------- modification -------------------- #
 
@@ -490,7 +496,7 @@ def generate_parsing_function(tree):
         return tree.Pop(src_lookup=src, dst_lookup=dst, ismono=ismono,
                         modreverse=modreverse)
 
-    @pgen.production('pop : SWAP lookup LRARROW lookup')
+    @pgen.production('swap : SWAP lookup LRARROW lookup')
     def swap(state, p):
         _, lhs, arrow, rhs = p
         ismono = lhs.hasmono or rhs.hasmono

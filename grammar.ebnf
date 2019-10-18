@@ -44,6 +44,8 @@ do_stmt = "do" "\n"
 
 barrier_stmt = "barrier" string ;
 
+mutex_stmt = "mutex" string "\n" {statemet} "xetum"
+
 try_stmt = "try" "(" basic_name "in" expression ")" "\n"
            {statement}
            "yrt" ;
