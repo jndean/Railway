@@ -333,7 +333,7 @@ def generate_parsing_function(tree):
 
     @pgen.production('mutex : MUTEX string NEWLINE statements XETUM')
     def mutex(state, p):
-        return tree.Mutex(name=p[1], lines=p[3], ismono=False, modreverse=False)
+        return tree.Mutex(name=p[1], lines=p[3], ismono=False, modreverse=True)
 
     # -------------------- modification -------------------- #
 

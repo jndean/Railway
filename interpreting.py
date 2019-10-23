@@ -1,5 +1,5 @@
 from copy import deepcopy
-from threading import Thread, Lock, Event
+from threading import Thread, Lock, Event, BrokenBarrierError
 from threading import Barrier as pyBarrier
 
 import AST
@@ -9,7 +9,7 @@ from parsing import generate_parsing_function
 # -------------------- Exceptions ----------------------  #
 
 class RailwayException(RuntimeError):
-    def __init__(self, message, scope):
+    def __init__(self, message, scope=None):
         self.message = message
         self.stack = []
         while scope is not None:
@@ -37,7 +37,7 @@ class RailwayExpectedMono(RailwayException): pass
 class RailwayExhaustedTry(RailwayException): pass
 class RailwayImportError(RailwayException): pass
 class RailwayMutexError(RailwayException): pass
-
+class RailwaySympatheticError(RailwayException): pass
 
 # -------------------- Interpreter-Only Objects ---------------------- #
 
@@ -115,7 +115,10 @@ class Scope:
 
     def wait_barrier(self, name):
         if self.thread_manager is not None:
-            self.thread_manager.get_barrier(name).wait()
+            try:
+                self.thread_manager.get_barrier(name).wait()
+            except BrokenBarrierError:
+                raise RailwaySympatheticError(None)
 
     def acquire_mutex(self, name, backwards):
         if self.thread_manager is None:
@@ -123,9 +126,13 @@ class Scope:
         my_turn, next_turn, mutex = self.thread_manager.get_mutex(
             name, backwards, self)
         my_turn.wait()
+        if self.thread_manager.panicked:
+            raise RailwaySympatheticError(None)
         return my_turn, next_turn, mutex
 
     def release_mutex(self, mutex_tuple):
+        if self.thread_manager.panicked:
+            raise RailwaySympatheticError(None)
         my_turn, next_turn, mutex = mutex_tuple
         if my_turn is not None:
             my_turn.clear()
@@ -146,12 +153,14 @@ class Variable:
 
 
 class ThreadManager:
+    __slots__ = ['num_threads', 'barriers', 'mutexes', 'lock', 'panicked']
 
     def __init__(self, num_threads):
         self.num_threads = num_threads
         self.barriers = {}
         self.mutexes = {}
         self.lock = Lock()
+        self.panicked = False
 
     def get_barrier(self, name):
         self.lock.acquire()
@@ -185,6 +194,14 @@ class ThreadManager:
         else:
             next_turn = None
         return my_turn, next_turn, mutex
+
+    def panic(self):
+        self.panicked = True
+        for barrier in self.barriers.values():
+            barrier.abort()
+        for mutex in self.mutexes.values():
+            for turn in mutex.turns:
+                turn.set()
 
 
 # ------------------------- AST Module level --------------------------#
@@ -366,10 +383,11 @@ def _eval_call_parallel(call, backwards, variables, scope):
                         args=(function, subscope, uncall, results, t_num))
         thread.start()
         threads.append(thread)
-    for i, thread in enumerate(threads):
+    for thread, result in zip(threads, results):
         thread.join()
-        if isinstance(results[i], Exception):
-            raise results[i]
+        if (isinstance(result, Exception)
+                and not isinstance(result, RailwaySympatheticError)):
+            raise result
     return [Variable(
         memory=[var.memory if var.isarray else var.memory[0] for var in vars],
         ismono=vars[0].ismono, isborrowed=False, isarray=True)
@@ -381,6 +399,7 @@ def _thread_worker(function, scope, backwards, results, t_num):
         results[t_num] = function.eval(scope=scope, backwards=backwards)
     except Exception as e:
         results[t_num] = e
+        scope.thread_manager.panic()
 
 
 def _split_variables(variables, params, num_threads, isuncall, call, scope):
@@ -445,6 +464,7 @@ class Try(AST.Try):
             backwards = _run_lines(self.lines, scope, backwards)
             scope.remove(self.lookup.name)
             return backwards
+
         if hasattr(self.iterator, 'lazy_eval'):
             memory = self.iterator.lazy_eval(scope, backwards)
         else:
@@ -975,7 +995,11 @@ class Binop(AST.Binop):
             raise RailwayTypeError(
                 f'Binary operation {self.name} does not accept arrays',
                 scope=scope)
-        return Fraction(self.op(lhs, rhs))
+        try:
+            result = self.op(lhs, rhs)
+        except ZeroDivisionError:
+            raise RailwayZeroError(f'{lhs} {self.name} {rhs}', scope=scope)
+        return Fraction(result)
 
     def eval_and(self, scope):
         lhs = self.lhs.eval(scope=scope)
