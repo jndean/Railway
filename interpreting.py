@@ -929,7 +929,7 @@ class ArrayRange(AST.ArrayRange):
         if step == 0:
             raise RailwayValueError(
                 f'Step value for array range must be non-zero', scope=scope)
-        length = (stop - start) // step
+        length = max(0, (stop - start) // step)
         return _LazyRange(start, step, length)
 
 
