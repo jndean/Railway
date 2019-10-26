@@ -294,13 +294,11 @@ def generate_parsing_function(tree):
 
     # -------------------- do-yield-undo -------------------- #
 
-    @pgen.production('do : DO NEWLINE'
-                     '      statements'
-                     '     YIELD NEWLINE'
-                     '      statements UNDO')
+    @pgen.production('do : DO NEWLINE statements YIELD NEWLINE statements UNDO')
+    @pgen.production('do : DO NEWLINE statements UNDO')
     def do_yield_undo(state, p):
         do_lines = p[2]
-        yield_lines = p[5]
+        yield_lines = p[5] if len(p) == 7 else []
         modreverse = any(i.modreverse for i in do_lines + yield_lines)
         return tree.DoUndo(do_lines, yield_lines,
                            ismono=False, modreverse=modreverse)
