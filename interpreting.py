@@ -521,7 +521,7 @@ class Print(AST.Print):
             pass #return
         vals = [t if isinstance(t, str) else _stringify(t.eval(scope))
                 for t in self.targets]
-        print(' '.join(vals), end="", flush=True)
+        print(' '.join(vals), end="", flush=False)
         return backwards
 
 
@@ -531,7 +531,7 @@ class PrintLn(AST.PrintLn):
             pass #return
         vals = [t if isinstance(t, str) else _stringify(t.eval(scope))
                 for t in self.targets]
-        print(' '.join(vals), flush=True)
+        print(' '.join(vals), flush=False)
         return backwards
 
 
@@ -929,7 +929,10 @@ class ArrayRange(AST.ArrayRange):
         if step == 0:
             raise RailwayValueError(
                 f'Step value for array range must be non-zero', scope=scope)
-        length = max(0, (stop - start) // step)
+        if step > 0:
+            length = max(0, (stop - start + step - 1) // step)
+        else:
+            length = max(0, (stop - start + step + 1) // step)
         return _LazyRange(start, step, length)
 
 
