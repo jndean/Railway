@@ -1,7 +1,9 @@
 
-module = {import} {let_stmt} {function} ;
+module = {import} {global} {function} ;
 
-import = "import" string ["as" [name]] ;
+import = "import" string ["as" [name]] "\n";
+
+global = "global" basic_name "=" expression "\n";
 
 function = "func" name "(" [name {","  name}] ")"
                        "(" [name {","  name}] ")" "\n"
@@ -26,7 +28,7 @@ swap_stmt = "swap" lookup "<=>" lookup ;
 if_stmt = "if" "(" expression ")" "\n"
            {statement}
            ["else" "\n" {statement}]
-           "fi" ["(" expression ")"] ;
+           "fi" "(" [expression] ")" ;
 
 loop_stmt = "loop" "(" expression ")" "\n"
             {statement}
@@ -34,16 +36,16 @@ loop_stmt = "loop" "(" expression ")" "\n"
 
 for_stmt = "for" "(" name "in" expression ")" "\n"
             {statement}
-            "rof" "(" name "in" expression ")" ;
+            "rof" ;
 
 do_stmt = "do" "\n"
           {statement}
-          ["yield" "\n" {yieldable_stmt}]
+          ["yield" "\n" {statement}]
           "undo" ;
 
 barrier_stmt = "barrier" string ;
 
-mutex_stmt = "mutex" string "\n" {statemet} "xetum" ;
+mutex_stmt = "mutex" string "\n" {statement} "xetum" ;
 
 try_stmt = "try" "(" basic_name "in" expression ")" "\n"
            {statement}
@@ -51,7 +53,7 @@ try_stmt = "try" "(" basic_name "in" expression ")" "\n"
 
 catch_stmt = "catch" "(" expression ")" ;
 
-promote_stmt = "promote" name ;
+promote_stmt = "promote" name ("<=" | "=>") name ;
 
 mod_stmt = lookup modification_op expression ;
 
@@ -66,8 +68,7 @@ call_stmt = ["(" name {"," name} ")" "=>"] call_chain_right
           | ["(" name {"," name} ")" "<="] call_chain_left
                 ["<=" "(" name {"," name} ")"] ;
 
-array_generator = "[" expression "for" name "in" expression "]"
-                | "[" expression "to" expression [ "by" expression ] "]" ;
+array_generator = "[" expression "to" expression [ "by" expression ] "]" ;
 
 array_literal = "[" [expression {"," expression}] "]" ;
 
@@ -83,9 +84,9 @@ expression = number
            | array_literal
            | array_generator
            | array_tensor
-	   | threadnum ;
+           | threadnum ;
 
-threadnum = "TID"
+threadnum = "TID" ;
 
 binary_op = "+" | "-" | "*" | "/" | "//" | "**" | "%" |
             "^" | "|" | "&" | "<=" | ">=" | "!=" | "==" |
