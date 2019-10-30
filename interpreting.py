@@ -35,6 +35,7 @@ class RailwayCallError(RailwayException): pass
 class RailwayIllegalMono(RailwayException): pass
 class RailwayExpectedMono(RailwayException): pass
 class RailwayExhaustedTry(RailwayException): pass
+class RailwayTryReverseError(RailwayException): pass
 class RailwayImportError(RailwayException): pass
 class RailwayMutexError(RailwayException): pass
 class RailwaySympatheticError(RailwayException): pass
@@ -460,11 +461,6 @@ CallBlock = AST.CallBlock
 
 class Try(AST.Try):
     def eval(self, scope, backwards):
-        if backwards:
-            backwards = _run_lines(self.lines, scope, backwards)
-            scope.remove(self.lookup.name)
-            return backwards
-
         if hasattr(self.iterator, 'lazy_eval'):
             memory = self.iterator.lazy_eval(scope, backwards)
         else:
@@ -472,7 +468,12 @@ class Try(AST.Try):
             if isinstance(memory, Fraction):
                 raise RailwayTypeError('The iterator provided to Try must be an'
                                        f' array, recieved a number', scope)
-        # lines = self.lines[::-1] if backwards else self.lines
+        if backwards:
+            exit_value = self.lookup.eval(scope)
+            _run_lines(self.lines, scope, backwards)
+            scope.remove(self.lookup.name)
+            # return backwards
+
         name = self.lookup.name
         i = 0
         while i < len(memory):
@@ -484,12 +485,23 @@ class Try(AST.Try):
                 var = Variable(memory=value, ismono=False, isborrowed=False,
                                isarray=True)
             scope.assign(name, var)
-            caught = _run_lines(self.lines, scope, backwards)
+            caught = _run_lines(self.lines, scope, backwards=False)
             if caught:
+                if backwards and value == exit_value:
+                    raise RailwayTryReverseError(
+                        'Reverse Try block catches the value it should pass: '
+                        f'{exit_value}', scope)
                 scope.remove(name)
                 i += 1
-            else:
-                return backwards
+                continue
+            if backwards:
+                if value != exit_value:
+                    raise RailwayTryReverseError(
+                        f'Try block passes the wrong value: {value}',
+                        scope)
+                _run_lines(self.lines, scope, backwards)
+                scope.remove(name)
+            return backwards
         raise RailwayExhaustedTry(f'No value of "{name}" was uncaught', scope)
 
 
@@ -610,10 +622,9 @@ class For(AST.For):
                 raise RailwayTypeError('For loop must iterate over array, '
                                        f'recieved number {memory}', scope=scope)
         name = self.lookup.name
-        i = len(memory)-1 if backwards else 0
+        i = len(memory) - 1 if backwards else 0
         while 0 <= i < len(memory):
             elt = memory[i]
-            backup = elt
             if not isinstance(elt, Fraction):
                 raise RailwayTypeError('Assigning an array to for-loop '
                                        f'variable "{name}"', scope=scope)

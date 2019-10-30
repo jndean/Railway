@@ -1,16 +1,13 @@
 func main(argv)()
-  try (x in [3,5,8,0])
-    print (x)
-    do
-      let y = x + 10
-      catch (y != 10)
-    yield
-      let result = y
-    undo
-  yrt
 
-  print("result is", result)
+    let x = 6
+    uncall mfunc() <= (x)
 
-  unlet result = 10
-  unlet x
 return ()
+
+
+func mfunc()()
+    try(x in [0 to 10])
+        catch(x != 6)
+    yrt
+return (x)
