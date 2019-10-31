@@ -1,0 +1,50 @@
+import "examples\run_length_encoding.rail" as RL
+import "examples\cellular_automaton.rail" as CA
+
+global key = [82, 65, 105, 49, 119, 52, 121, 33]
+
+func main(argv)()
+    let grid = CA.grid
+
+    (grid) => call serialise()   \
+            > call RL.compress() \
+            > uncall decrypt(key)\
+           => (data)
+
+    println(data)
+
+    (data) => call decrypt(key) \
+            > uncall RL.compress()\
+            > uncall serialise() \
+           => (grid)
+
+    call CA.draw(grid, CA.w, CA.h)
+
+    unlet grid = CA.grid
+return ()
+
+
+func decrypt(key)(data)
+   let klen = #key
+   for (i in [0 to #data])
+       data[i] -= key[-i % klen]
+       data[i] /= key[i % klen]
+   rof
+   unlet klen = #key
+return (data)
+
+
+func serialise()(data)
+    let output = []
+    let row_width = #data[0]
+    loop (#data)
+        pop data => row
+        for (_ in [0 to row_width])
+            pop row => val
+            push val => output
+        rof
+        unlet row = []
+    pool (#output)
+    push row_width => output
+    unlet data = []
+return (output)
