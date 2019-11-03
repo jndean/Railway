@@ -1,0 +1,52 @@
+$$ !! UNFINISHED !! $$
+
+
+func main(argv)()
+
+    $ Generate an array of pseudo-random 16-bit numbers $
+    let state = 61899
+    let array = []
+    for (_ in [0 to 100])
+        (state) => call random() => (state)
+	let value = state
+        push value => array
+    rof
+
+    
+   
+return ()
+
+
+func mean_var(array)()
+
+   let 
+
+return ()
+
+
+$ Consumes state, spits out new state $
+func random()(state)
+    (state) => call numTo16Bits() => (bits)
+    pop bits => bit
+    let newbit = bits[10] ^ bits[12] ^ bits[13] ^ bit
+    unlet bit = bits[10] ^ bits[12] ^ bits[13] ^ newbit
+    let padding = 0
+    push padding => bits    
+    (state) <= uncall numTo16Bits() <= (bits)
+    state *= 2
+    state += newbit
+    unlet newbit = state % 2
+return (state)
+
+
+$ Consumes 16-bit number, returns array of 16 bits $
+func numTo16Bits()(num)
+    let bits = []
+    for (_ in [0 to 16])
+         let bit = num % 2
+	 num -= bit
+         num /= 2
+         push bit => bits
+    rof
+    unlet num = 0
+return (bits)

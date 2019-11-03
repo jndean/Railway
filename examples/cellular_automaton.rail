@@ -28,21 +28,18 @@ global w = #grid[0]
 global h = #grid
 global offset
 
-global n = 30
+global n = 20
 
 
 func main(argv)()
     for (i in [0 to n])
-        println(">>> FORWARDS (", i, ") >>>")
         call update(grid)
         call draw(grid, w, h)
     rof
     for (i in [n to 0 by -1])
-        println("<<< BACKWARDS (", i, ") <<<")
         uncall update(grid)
         call draw(grid, w, h)
     rof
-    println("### DONE ###")
 return ()
 
 
