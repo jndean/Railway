@@ -83,10 +83,11 @@ lg.add("RBRACK", r"\}")
 lg.add("COMMA", r"\,")
 
 # Symbols with special meaning
+lg.add("THREADID", r"TID")
+lg.add("NUMTHREADS", r"#TID")
 lg.add("MONO", r"\.")
 lg.add("LEN", r"#")
 lg.add("NOT", r"!")
-lg.add("THREADNUM", r"TID")
 
 lg.add("NUMBER", r"\d+(\/\d+)?")
 lg.add("NAME", r"[a-zA-Z_][a-zA-Z0-9_.]*")
@@ -99,6 +100,7 @@ lg.ignore(r"\\[ \t\r\f\v]*\n")
 lg.ignore(r"[ \t\r\f\v]+")
 # Comments
 lg.ignore(r"\$[^\n]*\n+")
+lg.ignore(r"\`[^`]*\`")
 
 lexer = lg.build()
 

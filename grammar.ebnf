@@ -84,9 +84,9 @@ expression = number
            | array_literal
            | array_generator
            | array_tensor
-           | threadnum ;
+           | threadid ;
 
-threadnum = "TID" ;
+threadid = "TID" ;
 
 binary_op = "+" | "-" | "*" | "/" | "//" | "**" | "%" |
             "^" | "|" | "&" | "<=" | ">=" | "!=" | "==" |

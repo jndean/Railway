@@ -709,14 +709,19 @@ def generate_parsing_function(tree):
             return (p[1],) + p[3]
         return p[1],
 
-    # -------------------- threadnum -------------------- #
+    # -------------------- numthreads, threadid -------------------- #
 
-    @pgen.production('threadnum : THREADNUM')
-    def varfuncname_name(state, p):
-        return tree.ThreadNum(hasmono=False)
+    @pgen.production('threadid : THREADID')
+    def threadid_threadid(state, p):
+        return tree.ThreadID(hasmono=False)
 
-    @pgen.production('expression : threadnum')
-    def expression_threadnum(state, p):
+    @pgen.production('numthreads : NUMTHREADS')
+    def numthreads_numthreads(state, p):
+        return tree.NumThreads(hasmono=False)
+
+    @pgen.production('expression : threadid')
+    @pgen.production('expression : numthreads')
+    def expression_threadid(state, p):
         return p[0]
 
     # -------------------- names -------------------- #

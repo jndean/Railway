@@ -142,7 +142,17 @@ class ArrayTensor(ExpressionNode):
                 or self.fill_expr.uses_var(name))
 
 
-class ThreadNum(ExpressionNode):
+class ThreadID(ExpressionNode):
+    __slots__ = []
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def uses_var(self, name):
+        return False
+
+
+class NumThreads(ExpressionNode):
     __slots__ = []
 
     def __init__(self, **kwargs):
@@ -264,6 +274,7 @@ class Barrier(StatementNode):
     __slots__ = ["name"]
 
     def __init__(self, name, **kwargs):
+        super().__init__(**kwargs)
         super().__init__(**kwargs)
         self.name = name
 

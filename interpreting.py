@@ -1105,9 +1105,16 @@ class Lookup(AST.Lookup):
         memory[index] = value
 
 
-class ThreadNum(AST.ThreadNum):
+class ThreadID(AST.ThreadID):
     def eval(self, scope):
         return scope.thread_num
+
+
+class NumThreads(AST.NumThreads):
+    def eval(self, scope):
+        if scope.thread_num == -1:
+            return scope.thread_num
+        return Fraction(scope.thread_manager.num_threads)
 
 
 class Fraction(AST.Fraction):
