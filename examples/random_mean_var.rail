@@ -1,25 +1,89 @@
 
-
 func main(argv)()
+    do
+        $ Generate an array of pseudo-random 16-bit numbers $
+        let state = 61899
+        let array = []
+        for (_ in [0 to 100])
+            (state) => call random() => (state)
+            let value = 17 + (state - 2**15) / 1000
+            push value => array
+        rof
 
-    $ Generate an array of pseudo-random 16-bit numbers $
-    let state = 61899
-    let array = []
-    for (_ in [0 to 100])
-        (state) => call random() => (state)
-        let value = state
-        push value => array
-    rof
-
+        $ Compute the mean and variance with 4 $
+        let mean
+        let variance
+        let n_threads = 4
+        call parallel_mean_var{n_threads}(array, mean, variance)
+    yield
+        println(array)
+        println("Mean:", mean, ", Variance:", variance)
+    undo
 return ()
 
 
-func mean_var(array)()
+$ -------------------------- Parallel mean var -------------------------- $
 
-   TNUM
-
+func parallel_mean_var(array, mean, variance)()
+    do
+        $ Each thread determines which elements it will sum $
+        let width = (#array + #TID - 1) // #TID
+        let start = TID * width
+        if (TID == #TID - 1)
+            let end = #array
+        else
+            let end = start + width
+        fi ()
+    yield
+        call mean(array, mean, start, end)
+        $ Make sure all threads finish mean before using it for variance $
+        barrier "mean done"
+        call variance(array, mean, variance, start, end)
+    undo
 return ()
 
+
+func mean(array, mean, start, end)()
+    do
+        let sum
+        for (i in [start to end])
+            sum += array[i]
+        rof
+    yield
+        mutex "mean"
+            mean += sum
+        xetum
+    undo
+
+    $ Thread 0 normalises once all threads are done summing $
+    barrier "mean"
+    if (TID == 0)
+        mean /= #array
+    fi ()
+return ()
+
+
+func variance(array, mean, variance, start, end)()
+    do
+        let sum
+        for (i in [start to end])
+            sum += (array[i] - mean) ** 2
+        rof
+    yield
+        mutex "variance"
+            variance += sum
+        xetum
+    undo
+
+    $ Thread 0 normalises once all threads are done summing $
+    barrier "variance"
+    if (TID == 0)
+        variance /= #array
+    fi ()
+return ()
+
+
+$ -------------------------------- Random ------------------------------- $
 
 $ Consumes state, spits out new state $
 func random()(state)
