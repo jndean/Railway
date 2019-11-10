@@ -104,10 +104,10 @@ $ Consumes 16-bit number, returns array of 16 bits $
 func numTo16Bits()(num)
     let bits = []
     for (_ in [0 to 16])
-         let bit = num % 2
-	 num -= bit
-         num /= 2
-         push bit => bits
+        let bit = num % 2
+	    num -= bit
+        num /= 2
+        push bit => bits
     rof
     unlet num = 0
 return (bits)
