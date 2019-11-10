@@ -11,7 +11,7 @@ There are some very interesting reversible functional languages ([CoreFun]( http
 
 _Railway_ is a reversible language in the sense that any sequence of statements can be run both forwards and backwards deterministically, and hence so can any _Railway_ program. This might evoke for you the image of a train on a fixed set of tracks, along which it can move freely in either direction. There are two reasons we might be interested in reversibility:
 
-1. __In theory__: A language in which every operation is invertible must necessarily be information-constant, that is it can not be possible to create or destroy information in any way. As silicon manufacturing processes get smaller and smaller, we become more and more concerned with the absolute physical limits of the technology. A process that destroys information is increasing entropy, and in turn is guaranteed to produce some quantity of heat (or maybe something else) no matter the design of the CPU. A process that uses a completely reversible model of computation need not increase entropy and so (in theory) has no guaranteed lower limit on the heat production. Of course nothing like that could be achieved by a reversible language such as _Railway_ being emulated by a non-reversible process on any current CPU, but studying reversible models of computation would be the first step on a path to understanding how to build such a system. 
+1. __In theory__: A language in which every operation is invertible must necessarily be information-constant, that is it can not be possible to create or destroy information in any way. As silicon manufacturing processes get smaller and smaller, we become more and more concerned with the absolute physical limits of the technology. A process that destroys information is increasing entropy, and in turn is guaranteed to produce some quantity of heat (or maybe something else) no matter the design of the CPU. A process that uses a completely reversible model of computation need not increase entropy and so (in theory) has no guaranteed lower limit on heat production. Of course nothing like that could be achieved by a reversible language such as _Railway_ being emulated by a non-reversible process on any current CPU, but studying reversible models of computation would be the first step on a path to understanding how to build such a system. 
 
    Also, people who talk about reversible programming languages sometimes talk about quantum computers, and I don't really know why.
 
@@ -31,4 +31,11 @@ _Railway_ is a reversible language in the sense that any sequence of statements 
    yrt
    ```
 
-   For more examples, you'll have to read the full documentation.
+   For more examples, you'll have to read the full documentation
+
+### Examples
+
+The examples directory contain some _Railway_ programs (files with the .rail extension) and (soon) discussions about why they do what they do. Writing the examples was the main way I learnt what is viable in a reversible program and where I decided on the course of further development. These are a good way to understand how the elements of the language interact, and how reversible programs behave differently to conventional ones.
+
+### Docs
+
