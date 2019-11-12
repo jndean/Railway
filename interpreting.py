@@ -240,6 +240,8 @@ class Import(AST.Import):
                          (module.functions, scope.functions)]:
             for key, val in src.items():
                 name = key if self.alias == '' else self.alias + '.' + key
+                # if val.ismono and :
+                #     name = '.' + name
                 if name in dst:
                     raise RailwayNameClash(
                         f'Name clash of "{name}" during import', scope=scope)
@@ -624,18 +626,23 @@ class For(AST.For):
         name = self.lookup.name
         i = len(memory) - 1 if backwards else 0
         while 0 <= i < len(memory):
-            elt = memory[i]
-            if not isinstance(elt, Fraction):
-                raise RailwayTypeError('Assigning an array to for-loop '
-                                       f'variable "{name}"', scope=scope)
-            var = Variable(memory=[elt], ismono=self.lookup.mononame,
-                           isborrowed=True, isarray=False)
+            element = deepcopy(memory[i])
+            isarray = isinstance(element, list)
+            if not isarray:
+                element = [element]
+            var = Variable(memory=element, ismono=self.lookup.mononame,
+                           isborrowed=True, isarray=isarray)
             scope.assign(name, var)
             backwards = _run_lines(self.lines, scope, backwards)
-            if var.memory[0] != memory[i]:
+            if isarray and var.memory != memory[i]:
+                raise RailwayValueError(
+                    f'For loop variable "{name}" has a different value to the '
+                    'corresponding iterator element after the code block has '
+                    'run', scope=scope)
+            if (not isarray) and var.memory[0] != memory[i]:
                 raise RailwayValueError(
                     f'For loop variable "{name}" has value {var.memory[0]} '
-                    f'after an iteration, but the source array has '
+                    f'after an iteration, but the iterator array has '
                     f'corresponding value {memory[i]}', scope=scope)
             scope.remove(name)
             i += -1 if backwards else 1
