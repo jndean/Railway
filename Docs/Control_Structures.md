@@ -32,13 +32,13 @@ rof
 
 
 $ Iterate over points, modifying the iterator in the loop $
-points = [[0,1], [5,-2], [9, 0]]
+let points = [[0,1], [5,-2], [9, 0]]
 for (point in points)
     if (point[0] < 3)
-        shifted_point = [point[0] + 3, point[1]]
+        let shifted_point = [point[0] + 3, point[1]]
         push shifted_point => points
     else
-        println('x:', point[0], 'y:', point[1])
+        println("x:", point[0], "y:", point[1])
     fi ()
 rof
 ```
@@ -109,15 +109,22 @@ _Grammar_:
 "fi" "(" [expression] ")" "\n"
 ```
 
-The if statement evaluates the first expression (the condition), runs the first block of statements if it is true and runs the else block otherwise (if it is provided), just like a normal if statement. When one of the code blocks runs it may modify the state of the program in a way which changes the value of the condition expression, necessitating a backwards condition. The evaluation of the forwards condition before the statement block runs must match the evaluation of the backwards condition after code block runs, and this is checked explicitly by the interpreter at run-time as with the loop conditions. 
+The if statement evaluates the first expression (the forwards condition), runs the first block of statements if it is true and runs the second block otherwise (if it is provided), just like a normal if statement. When running backwards the second expression (the backwards condition) is used instead. The evaluation of the forwards condition before the statement block runs must match the evaluation of the backwards condition after the statement block runs to ensure the code reverses properly, and this is checked explicitly by the interpreter at run-time much like the conditions in the loop construct. The backwards condition is necessary because when one of the blocks runs it may modify the state of the program in a way which changes the value of the forwards condition expression, and thus when entering the if statement in reverse it is not possible to know which code block to run using only the forwards condition.
+
+_Example_:
 
 ```railway
 ball_y += ball_speed_y
 if (ball_y <= 0)
-    $ Bounce
+    $ Ball hit the floor, so bounce $
     ball_speed_y *= -1
     ball_y *= -1
 fi (ball_y - ball_speed_y <= 0)
 ```
 
-In this way, self-modification is possible (i.e. the change to `ball_y` is dependent on the value of `ball_y`) without destroying information. 
+See that in this example `ball_y` will always be non-negative after the if statement, so the backwards condition must check if the ball hit the floor in a different way. Hence self-modification is possible (i.e. the change to `ball_y` is dependent on the value of `ball_y`) without destroying information. If the programmer tries to do something non-invertible using an if statement, they will find it impossible to write a backwards condition that passes the run-time checks, and thus the language still guarantees reversibility. 
+
+Leaving the backwards condition brackets empty is a syntactic shorthand to imply that both conditions are the same, reducing typing and visual code clutter. Originally the way to do this was to omit the brackets as well, but I found this made it too easy to forget to consider the backwards condition at all, what with it being an unusual thing to need to consider. Having to type the empty brackets helps remind me that I am explicitly setting the backwards condition to be the same as the forwards condition.
+
+An if statement is mono-directional if any mono variables are used in the the forwards condition, in which case it will only be evaluated when the code is running forwards. A mono if statement cannot modify any non-mono variables, and cannot have a backwards condition.
+
