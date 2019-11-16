@@ -128,3 +128,72 @@ Leaving the backwards condition brackets empty is a syntactic shorthand to imply
 
 An if statement is mono-directional if any mono variables are used in the the forwards condition, in which case it will only be evaluated when the code is running forwards. A mono if statement cannot modify any non-mono variables, and cannot have a backwards condition.
 
+
+
+## Do-Yield-Undo
+
+_Grammar_:
+
+```
+"do" "\n"
+    {statement}
+["yield" "\n"
+    {statement}]
+"undo" "\n"
+```
+
+When time is going forwards, this construct does three things in order:
+
+1. Runs the first statement block (the do block) forwards
+2. Runs the second statement block (the yield block) forwards (if it is provided)
+3. Runs the do block backwards
+
+The motivation for do-yield-undo comes from the importance of cleaning up after yourself in _Railway_, since variables cannot pass out of scope and hence must be uninitialised. The do block is used to compute short-lived variables, the yield block may make use of them, then the do block is reversed to uncompute them and remove them from scope at no mental cost to the programmer.
+
+```railway
+do
+    let sum = 0
+    for (x in X)
+        sum += x
+    rof
+yield
+    call furtherComputation(sum)
+undo
+```
+
+When we introduced the need to _unlet_ all our variables explicitly by value, we noted that surely this would mean we need to know the results of all our computations ahead of time. It is by frequent use of do-yield-undo that we avoid this issue, using undo blocks to reverse the computation of variables and hence remove them from scope without knowing their end value whilst writing the program.
+
+Originally this feature was going to be less general. I wanted to address the difficulties of cleaning up a function scope before returning, and so I introduced a 'copy-return' as an alternative to a return at the end of a function call. If a copy-return was used, the function would run forwards, copy the values to be returned out into temporary space, then run backwards, cleaning up everything in scope. For example:
+
+```railway
+$ VERSION 1 : NOT VALID RAILWAY CODE $
+func myfunc(X, i, j, mu)()
+	let sum = 0
+    for (x in X)
+        sum += x
+    rof
+    let a = (X[i] / sum) - mu
+    let b = (X[j] / sum) - mu
+    let result = (a*a + b*b) ** (1/2)
+copyreturn (result)
+```
+
+This is a good convenience feature, however it has two major drawbacks; copy-return functions are unable to have side-effects (they just get undone), and it doesn't have much granularity unless you make lots of tiny functions. Before I came to implement copy-return I read about the do-yielding-undo control structure in [Arrow](https://etd.ohiolink.edu/!etd.send_file?accession=oberlin1443226400&disposition=inline "Arrow language"), and decided this was a more general tool that could also take the place of copy-return.
+
+``` railway
+$ VERSION 2 : VALID RAILWAY CODE $
+func myfunc(X, i, j, mu)()
+  do
+	let sum = 0
+    for (x in X)
+        sum += x
+    rof
+    let a = (X[i] / sum) - mu
+    let b = (X[j] / sum) - mu
+  yield
+    let result = (a*a + b*b) ** (1/2)
+  undo
+return (result)
+```
+
+Also, I was originally going to allow only a 'yieldable' subset of statements in yield blocks, specifically I was going to try and make it impossible for the yield block to modify any variables that were used in the do block. This was to guarantee that the 'undo' would perfectly revert the state changes enacted by the 'do'. However, it wasn't clear what things should be yieldable, and I eventually decided this was because the restrictions were a bit meaningless. The do-yield-undo is just syntactic shorthand for applying a process, doing some work, then applying the process in reverse, which you can very well do by hand writing the undo statements. Thus the same mechanisms that prevent you from doing anything non-invertible in that situation will apply during the do-yield-undo, and if you manage to confuse yourself you should eventually hit an uninitialisation value error. For an example of a yield block that modifies variables used by the do block, see the 'transform' function in "examples/cellular_automaton.rail".

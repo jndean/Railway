@@ -25,7 +25,7 @@ _Railway_ is a reversible language in the sense that any sequence of statements 
    As another example, the try-catch construct makes several attempts to run a block of code with different initial conditions provided by an iterator. Any time a catch happens, the interpreter reverts the state of the program back to the beginning of the try block by running the relevant lines backwards, then reattempts the try with the next initial condition.
 
    ```railway
-   try (step_size in [1 to 0.1 by -0.1])
+   try (step_size in [10 to 1 by -1])
        call step_simuation(state, step_size) => (error)
        catch (error > epsilon)
    yrt
