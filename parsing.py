@@ -8,6 +8,8 @@ from rply import ParsingError as RplyParsingError
 import AST
 import interpreting
 import lexing
+import newlexer
+
 
 __all__ = ['generate_parsing_function', 'RailwaySyntaxError']
 
@@ -744,7 +746,7 @@ def generate_parsing_function(tree):
     def parse(filename):
         with open(filename, 'r') as f:
             source = f.read() + '\n'
-        tokens = lexing.lexer.lex(source)
+        tokens = newlexer.lex(source)  # lexing.lexer.lex(source)
         try:
             state = ParserState(filename=filename, parser=_parser)
             return _parser.parse(tokens, state=state)

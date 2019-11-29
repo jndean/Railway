@@ -1,5 +1,5 @@
-$ USAGE:
-$   railway predict.rail -f32 W1.float32 -f32 W2.float32 -f32 images/1_two.img
+$ USAGE: $
+$   railway predict.rail -f32 W1.float32 -f32 W2.float32 -f32 images/1_two.img $
 
 global img_res = 28 * 28
 global num_hidden = 30
