@@ -38,13 +38,13 @@ There are 3 kinds of expression for creating arrays.
    _Examples:_
 
    ```railway
-   $ Creates [0, 1, 2, 3]
+   $ Creates [0, 1, 2, 3] $
    let X = [0 to 4]
    
-   $ Creates [10, 15/2, 5, 5/2]
+   $ Creates [10, 15/2, 5, 5/2] $
    let Y = [10 to X[2] by -5/2]
    
-   $ Lazy element evaluation in for loops avoids creating an array of size 100
+   $ Lazy element evaluation in for loops avoids creating an array of size 100 $
    for (i in [0 to 100])
       println (i)
    rof
@@ -63,10 +63,10 @@ There are 3 kinds of expression for creating arrays.
    _Examples:_
 
    ```railway
-   $ Create a 3x4 tensor of zeros (array of 3 arrays of 4 zeros each)
+   $ Create a 3x4 tensor of zeros (array of 3 arrays of 4 zeros each) $
    let Z = [0 tensor [3, 4]]
    
-   $ Copies Z into a 2x2 tensor, resulting in a 2x2x3x4 tensor of zeros
+   $ Copies Z into a 2x2 tensor, resulting in a 2x2x3x4 tensor of zeros $
    let points = [Z tensor [2, 2]]
    ```
 
@@ -141,8 +141,8 @@ _Examples_:
 ```railway
 x += 1
 x -= 2
-x *= 3
-x /= 4
+array[x] *= 3
+array[i][j] /= 4
 ```
 
 These work as expected, with the possible exception of Multiplication. In _Railway_, multiplying by 0 in place raises a _ZeroError_ at run-time because it is not invertible. When the code runs backwards, that 0 multiplication would be a 0 division, which should make you uncomfortable.
@@ -201,7 +201,7 @@ In _Railway_ we can do initialisation but not assignment because, as discussed a
 Self-modification is when information from a variable is used to modify that same variable. This is not allowed within a _Railway_ statement (though it is possible in other ways), since it is not in general invertible.
 
 ```railway
-x /= x
+x -= x
 ```
 
 Clearly the information in _x_ is destroyed here, so this code cannot be reversed. Below are more types of single-statement self-modification, all of which will be caught at parse-time.
