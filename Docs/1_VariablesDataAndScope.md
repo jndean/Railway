@@ -10,7 +10,7 @@ There are 3 kinds of expression for creating arrays.
 
 1. __Array Literals__
 
-   Creates an array from an itemised list of contents. There is no aliasing in *Railway*, so any variables named in the array literal will by copied to the new array (so in the example below parts of A are copied into B twice, and A is not accessible via B).
+   Creates an array from an itemised list of contents. There is no [aliasing](#self-modification-&-aliasing) in *Railway*, so any variables named in the array literal will by copied to the new array (so in the example below parts of A are copied into B twice, and A is not accessible via B).
 
    _Grammar:_
 
@@ -159,7 +159,7 @@ _Grammar_:
 "swap" lookup "<=>" lookup
 ```
 
-Here _name_ means any legal variable name, and _lookup_ is a name and optionally some indices. The _pop_ statement removes the last element of the array specified by the _lookup_, and assigns it to the _name_ in the current scope. The _push_ statement removes the named variable from current scope and appends it as an item on the end of the array specified by the lookup. This behaviour ensures that _push_ and _pop_ are mutual inverses, and prevents aliasing by making sure that data pushed to an array cannot still be accessed via its old name. Whenever you see an arrow (`=>`) in _Railway_, it means an object is changing ownership, and you will no longer be able to access it under its old name.
+Here _name_ means any legal variable name, and _lookup_ is a name and optionally some indices. The _pop_ statement removes the last element of the array specified by the _lookup_, and assigns it to the _name_ in the current scope. The _push_ statement removes the named variable from current scope and appends it as an item on the end of the array specified by the lookup. This behaviour ensures that _push_ and _pop_ are mutual inverses, and prevents [aliasing](#self-modification-&-aliasing) by making sure that data pushed to an array cannot still be accessed via its old name. Whenever you see an arrow (`=>`) in _Railway_, it means an object is changing ownership, and you will no longer be able to access it under its old name.
 
 _Examples_:
 
