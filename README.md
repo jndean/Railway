@@ -1,5 +1,5 @@
 # Railway
-Railway is my attempt at a reversible imperative programming language. Its unique features (compared to reversible languages I have read about) include communicating multi-threading, mono-directional 'rvalue' variables, and the try-catch construct. In the interest of unrestricted experimentation some of the language's features are rather at odds with one another conceptually, however they are disjoint enough that there are very cohesive subsets.
+Railway is my (amateur) attempt at a reversible imperative programming language. Its unique features (compared to reversible languages I have read about) include communicating multi-threading, mono-directional 'rvalue' variables, and the try-catch construct. In the interest of unrestricted experimentation some of the language's features are rather at odds with one another conceptually, however they are disjoint enough that there are very cohesive subsets.
 
 This repository contains a very simple tree-walking proof-of-concept _Railway_ interpreter, placing a high emphasis on ensuring program correctness at run-time and completely disregarding performance (speed). A possible future project is to write a proper byte-code compiler, or devise an alternative dialect suitable for machine-code compilation.
 
@@ -33,9 +33,16 @@ _Railway_ is a reversible language in the sense that any sequence of statements 
 
    For more examples, you'll have to read the full documentation
 
-### Examples
-
-The examples directory contain some _Railway_ programs (files with the .rail extension) and (soon) discussions about why they do what they do. Writing the examples was the main way I learnt what is viable in a reversible program and where I decided on the course of further development. These are a good way to understand how the elements of the language interact, and how reversible programs behave differently to conventional ones.
-
 ### Docs
 
+_Documentation_ is a pretty strong word for what's written in the following pages, but it does go into detail about most of the components of _Railway_ the language, how they are generally composed into _Railway_ programs, and a little bit of design narrative. They were written in a specific order, so unfortunately to make complete sense of the more interesting later topics you might need to read the basic ones. Even the basic elements of the language need careful consideration to ensure reversibility.
+1. [Variables, Data and Scope](https://github.com/jndean/railway/wiki/Variables,-Data-and-Scope)
+2. [Control Structures](https://github.com/jndean/railway/wiki/Control-Structures)
+3. [Functions](https://github.com/jndean/railway/wiki/Functions)
+4. [Mono Variables](https://github.com/jndean/railway/wiki/Mono-Variables)
+5. [Parallelism](https://github.com/jndean/railway/wiki/Parallelism)
+
+
+### Examples
+
+The examples directory contain some _Railway_ programs (files with the .rail extension) and (maybe later) discussions about why they do what they do. Writing the examples was the main way I learnt what is viable in a reversible program and where I decided on the course of further development. These are a good way to see how the elements of the language interact, and how reversible programs behave differently to conventional ones.
