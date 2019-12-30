@@ -1,39 +1,59 @@
-$ USAGE:
-$   railway fibonacci.rail -n 10
+$ USAGE $
+$   python railway.py fibonacci.rail -n 9   $
+
+$ This example shows that recursion is available as normal and is invertible, $
+$ by explicitly computng and uncomputing the Nth fibonaci number. Normally to $
+$ Do something forwards and then backwards like this we'd us a do-undo, but I $
+$ wanted the undo to happen very explicitly for the sake of the example. $
 
 func main(argv)()
-  pop N <= argv
+  pop argv => N
 
-  do
-    let n = N
-    let space
-    let result
-    call Fib(n, space, result)
-  yield
-    println("fib(", N,") = ", result)
-  undo
+  $ Compute fib(N) fowards $
+  print('fib(', N, ') = ')
+  let result
+  let previous
+  call Fib(N, previous, result)
+  println(result)
 
-  do
-    let result = 1597
-    let space = 987
-    let n = 1
-    uncall Fib(n, space, result)
-  yield
-    println("inverse_fib( 1597, 987 ) =", n)
-  undo
+
+  $ Compute fib^-1(previous, result)  $
+  print('inverse_fib(', result, ',', previous, ') = ')
+  uncall Fib(N, previous, result)
+  println(N)
+  unlet previous
+  unlet result
 
   push N => argv
 return ()
 
 
-func Fib(n, space, result)()
+func Fib(n, previous, result)()
   n -= 1
+
   if (n==1)
-    space += 1
+    $ The base case of the recursion $
+    previous += 1
     result += 1
   else
-    call Fib(n, space, result)
-    space += result
-    swap space <=> result
-  fi(space==result)
+    $ The recursive call $
+    call Fib(n, previous, result)
+    previous += result
+    swap previous <=> result
+  fi (previous == result)
+
 return ()
+
+
+$ If we the point of the example wasn't to show recursion, we'd do $
+$ do fibonaci with a loop like below $
+func Fib_loop()(n)
+  let result = 1
+  let previous = 1
+  loop (n > 2)
+    result += previous
+    swap previous <=> result
+    n -= 1
+  pool (result != 1)
+  unlet n = 2
+return (result, previous)
