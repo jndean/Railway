@@ -1,5 +1,6 @@
 import re
 from rply import Token
+from rply.token import SourcePosition as SourcePos
 
 __all__ = ['RailwayLexingError', 'symbols']
 
@@ -7,7 +8,6 @@ __all__ = ['RailwayLexingError', 'symbols']
 class RailwayLexingError(RuntimeError):
     def __init__(self, line, col):
         self.line, self.col = line, col
-
 
 name_regex = re.compile(r'[a-zA-Z_][a-zA-Z0-9_.]*')
 number_regex = re.compile('\d+(\/\d+)?')
@@ -105,7 +105,7 @@ def lex(data):
 
         if data[pos] == '\n':
             if not skip_newline:
-                yield Token('NEWLINE', '\n')  # , (line, col))
+                yield Token('NEWLINE', '\n', SourcePos(pos, line, col))
             skip_newline = True
             line += 1
             col = 0
@@ -116,7 +116,7 @@ def lex(data):
             if data[pos:pos + sym_length] in symbols:
                 endpos = pos + sym_length
                 string = data[pos:endpos]
-                yield Token(symbols[string], string)  # , (line, col))
+                yield Token(symbols[string], string, SourcePos(pos, line, col))
                 skip_newline = False
                 col += sym_length
                 pos = endpos
@@ -126,7 +126,7 @@ def lex(data):
             if name_match:
                 endpos = name_match.span()[1]
                 string = data[pos:endpos]
-                yield Token('NAME', string)  # , (line, col))
+                yield Token('NAME', string, SourcePos(pos, line, col))
                 skip_newline = False
                 col += endpos - pos
                 pos = endpos
@@ -136,7 +136,7 @@ def lex(data):
             if number_match:
                 endpos = number_match.span()[1]
                 string = data[pos:endpos]
-                yield Token('NUMBER', string)  # , (line, col))
+                yield Token('NUMBER', string, SourcePos(pos, line, col))
                 skip_newline = False
                 col += endpos - pos
                 pos = endpos
@@ -146,7 +146,7 @@ def lex(data):
             if string_match:
                 endpos = string_match.span()[1]
                 string = data[pos:endpos]
-                yield Token('STRING', string)  # , (line, col))
+                yield Token('STRING', string, SourcePos(pos, line, col))
                 skip_newline = False
                 col += endpos - pos
                 pos = endpos
@@ -170,7 +170,7 @@ def lex(data):
             raise RailwayLexingError(line, col)
 
     if not skip_newline:
-        yield Token('NEWLINE', '\n')  # , (line, col))
+        yield Token('NEWLINE', '\n', SourcePos(pos, line, col))
 
 
 if __name__ == '__main__':
