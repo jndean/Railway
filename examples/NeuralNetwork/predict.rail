@@ -1,5 +1,18 @@
-$ USAGE: $
-$   railway predict.rail -f32 W1.float32 -f32 W2.float32 -f32 images/1_two.img $
+$
+USAGE:
+ python railway.py predict.rail \
+         -f32 W1.float32 \
+         -f32 W2.float32 \
+         -f32 images/11_six.float32
+
+This program runs a tiny neural network to guess the hand-written digit in
+images taken from the MNIST corpus. It demonstrates passing data files in from
+the command line, where you must specify the weight files for the network and
+the image file on which to perform inference. It also demonstrates two possible
+implementations of the argmax function: one uses the try-catch construct,
+the other uses mono variables.
+$
+
 
 global img_res = 28 * 28
 global num_hidden = 30
@@ -30,13 +43,14 @@ func main(argv)()
     (class) <= call argmax(h3)
 
   yield
-    println ("Predicted Class:", class)
+    println ('Predicted Class:', class)
   undo
 
 return ()
 
 
 func matmul(X, Y)()
+  $ Multiply 2D matrices X and Y together, returning a new matrix $
   let result = []
   for (row_num in [0 to #X])
     let row = []
@@ -53,6 +67,7 @@ return (result)
 
 
 func reshape2D(X, height, width)()
+  $ Reshape a 1D array into a 2D matrix with the given dimensions $
   let result = [0 tensor [height, width]]
   for (rownum in [0 to height])
     for (colnum in [0 to width])
@@ -63,6 +78,17 @@ return (result)
 
 
 func argmax(X)()
+    let .max = 0
+    for (.i in [1 to #X[0]])
+        if (X[0][.i] > X[0][.max])
+            let .max = .i
+        fi ()
+    rof
+    promote .max => max
+return (max)
+
+
+func argmax_alternative(X)()
    try (best in [0 to #X[0]])
      for (i in [0 to #X[0]])
        catch (X[0][best] < X[0][i])
@@ -89,11 +115,11 @@ func .draw(X)()
   for (.y in [0 to 28])
     for (.x in [0 to 28])
       if (X[0][.y*28 + .x])
-        print("  ")
+        print('  ')
       else
-        print("XX")
+        print('XX')
       fi ()
     rof
-    println(" ")
+    println(' ')
   rof
 return ()
