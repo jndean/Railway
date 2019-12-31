@@ -69,6 +69,7 @@ symbols = {
     '|=': 'MODOR',
     '&=': 'MODAND',
     '//': 'IDIV',
+    '**': 'POW',
     '<': 'LESS',
     '>': 'GREAT',
     '=': 'ASSIGN',
