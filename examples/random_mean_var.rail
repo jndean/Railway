@@ -1,3 +1,19 @@
+$
+USAGE:
+ python railway.py examples/random_mean_var.railway
+
+This program uses a cyclic shift register to generate an array of random
+numbers. CCRs are designed around fast register ops on CPUs, and are really
+badly suited to the reversible operations on arbitrary precision rationals used
+in railway. Hence the random function has an awkward pattern where it pops a
+bit, computes the new bit, then undoes the new bit computation to figure out how
+to uninitialise the old bit. It also uses a helper function to translate between
+rationals and a bit array, which carefully consumes its inputs to limit how much
+information is in scope to be cleaned up later.
+
+Once it has generated random numbers, it demonstrates a multithreaded algorithm
+to compute the mean and variance in parallel, with mutexes and barriers.
+$
 
 func main(argv)()
     do
@@ -10,14 +26,14 @@ func main(argv)()
             push value => array
         rof
 
-        $ Compute the mean and variance with 4 $
+        $ Compute the mean and variance with 4 threads $
         let mean
         let variance
         let n_threads = 4
         call parallel_mean_var{n_threads}(array, mean, variance)
     yield
-        println(array)
-        println("Mean:", mean, ", Variance:", variance)
+        println('Random array:', array)
+        println('Mean:', mean, ', Variance:', variance)
     undo
 return ()
 
@@ -37,7 +53,7 @@ func parallel_mean_var(array, mean, variance)()
     yield
         call mean(array, mean, start, end)
         $ Make sure all threads finish mean before using it for variance $
-        barrier "mean done"
+        barrier 'mean done'
         call variance(array, mean, variance, start, end)
     undo
 return ()
@@ -50,13 +66,13 @@ func mean(array, mean, start, end)()
             sum += array[i]
         rof
     yield
-        mutex "mean"
+        mutex 'mean'
             mean += sum
         xetum
     undo
 
     $ Thread 0 normalises once all threads are done summing $
-    barrier "mean"
+    barrier 'mean'
     if (TID == 0)
         mean /= #array
     fi ()
@@ -70,13 +86,13 @@ func variance(array, mean, variance, start, end)()
             sum += (array[i] - mean) ** 2
         rof
     yield
-        mutex "variance"
+        mutex 'variance'
             variance += sum
         xetum
     undo
 
     $ Thread 0 normalises once all threads are done summing $
-    barrier "variance"
+    barrier 'variance'
     if (TID == 0)
         variance /= #array
     fi ()
