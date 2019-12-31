@@ -1,3 +1,32 @@
+$
+USAGE
+python railway.py examples/cellular_automaton.rail
+
+This program implements a reversible cellular automaton called 'critters'. The
+grid is segmented into 2x2 blocks of cells (wrapped at the grid edge) which
+alternate between starting at (0,0) and (1,1) each timestep. At each timestep
+the live cell count in each block can be from 0 to 4. If the count is 2, every
+cell in the block flips state. If the sum is a special value (which alternates
+between 1 and 3 each timestep) the block is rotated 180 degrees. Otherwise the
+block is unchanged.
+
+Because this cellular automaton is invertible (unlike the more famous Conway's
+Game of Life) the grid update function in this program can operate in place
+and still be invertible. This program runs the update forwards for a while,
+making the critters scatter into randomness, then runs time backwards so that
+they reverse into their original structure. I would have done this with a
+do-undo structure, but we always want the draw function to run forwards. If it
+ran backwards it would print the grid upside-down and back-to-front. Hence the
+forwards and backwards runs are both for loops with time running forwards.
+
+This program demonstrates a monodirectional function (.draw), and a do-yield-undo
+where the yield block modifies the variables used in the do block ('grid' is
+modified even though it is used to compute 'sum'). It also uses swap to move
+cells in the grid in place.
+$
+
+
+
 
 global grid = [\
 [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],\
@@ -26,7 +55,6 @@ global grid = [\
 
 global w = #grid[0]
 global h = #grid
-global offset
 
 global n = 20
 
@@ -34,11 +62,11 @@ global n = 20
 func main(argv)()
     for (i in [0 to n])
         call update(grid)
-        call draw(grid, w, h)
+        call .draw(grid, w, h)
     rof
     for (i in [n to 0 by -1])
         uncall update(grid)
-        call draw(grid, w, h)
+        call .draw(grid, w, h)
     rof
 return ()
 
@@ -46,16 +74,14 @@ return ()
 func update(grid)()
     for (transform_type in [1, 3])
         $ Iterate over the top left corner of the 2x2 blocks $
+        let offset = transform_type == 3
         for (x in [offset to w by 2])
             for (y in [offset to h by 2])
                 call transform(grid, x, y, transform_type)
             rof
         rof
+        unlet offset = transform_type == 3
     rof
-
-    $ Apply the transposition (0 <-> 1) to offset $
-    offset *= -1
-    offset += 1
 return ()
 
 
@@ -72,7 +98,7 @@ func transform(grid, x, y, transform_type)()
         sum += grid[up][right]
     yield
         if (sum == 2)
-            $ Flip every cell in the block $
+            $ Flip every cell in the block, 0 <-> 1 $
             grid[y][x] *= -1
             grid[y][x] += 1
             grid[up][x] *= -1
@@ -91,23 +117,21 @@ func transform(grid, x, y, transform_type)()
 return ()
 
 
-func draw(grid, width, height)()
-    for (y in [0 to height])
-        print("|")
-        for (x in [0 to width])
-            if (grid[y][x])
-                 print("O")
+func .draw(grid, width, height)()
+    for (.y in [0 to height])
+        print('|')
+        for (.x in [0 to width])
+            if (grid[.y][.x])
+                 print('O')
             else
-                print(" ")
+                print(' ')
             fi ()
         rof
-        println("|")
+        println('|')
     rof
-    print("+")
-    for (_ in [0 to width])
-      print("-")
+    print('+')
+    for (._ in [0 to width])
+      print('-')
     rof
-    println("+")
-    let nonmono
-    unlet nonmono
+    println('+')
 return ()
