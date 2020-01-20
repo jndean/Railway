@@ -39,6 +39,9 @@ class Fraction(BuiltinFraction):
     def uses_var(self, name):
         return False
 
+    def __repr__(self):
+        return str(self)
+
 
 class Binop(ExpressionNode):
     __slots__ = ["lhs", "op", "rhs", "name"]
@@ -53,6 +56,9 @@ class Binop(ExpressionNode):
     def uses_var(self, name):
         return self.lhs.uses_var(name) or self.rhs.uses_var(name)
 
+    def __repr__(self):
+        return f'({self.lhs} {self.name} {self.rhs})'
+
 
 class Uniop(ExpressionNode):
     __slots__ = ["op", "expr", "name"]
@@ -65,6 +71,9 @@ class Uniop(ExpressionNode):
 
     def uses_var(self, name):
         return self.expr.uses_var(name)
+
+    def __repr__(self):
+        return f'{self.name}{self.expr}'
 
 
 class Lookup(ExpressionNode):
@@ -79,6 +88,11 @@ class Lookup(ExpressionNode):
     def uses_var(self, name):
         return (self.name == name) or any(i.uses_var(name) for i in self.index)
 
+    def __repr__(self):
+        if self.index:
+            return f'{self.name}[{"][".join(repr(i) for i in self.index)}]'
+        return self.name
+
 
 class Parameter:
     __slots__ = ["name", "mononame", "isborrowed"]
@@ -87,6 +101,9 @@ class Parameter:
         self.name = name
         self.mononame = mononame
         self.isborrowed = isborrowed
+
+    def __repr__(self):
+        return repr(self.name)
 
 
 class Length(ExpressionNode):
@@ -98,6 +115,9 @@ class Length(ExpressionNode):
 
     def uses_var(self, name):
         return self.lookup.uses_var(name)
+
+    def __repr__(self):
+        return f'#{repr(self.lookup)}'
 
 
 class ArrayLiteral(ExpressionNode):
@@ -384,101 +404,3 @@ class Module:
         self.functions = functions
         self.global_lines = global_lines
         self.name = name
-
-
-def display(node, indent=0):
-    start = ' |' * indent + '->'
-    indent += 1
-
-    if isinstance(node, Fraction):
-        print(start, str(node))
-
-    elif isinstance(node, Binop):
-        print(start, node.name)
-        display(node.lhs, indent)
-        display(node.rhs, indent)
-
-    elif isinstance(node, Uniop):
-        print(start, node.name)
-        display(node.expr, indent)
-
-    elif isinstance(node, Lookup):
-        print(start, node.name + '[]' * len(node.index))
-        for idx in node.index:
-            display(idx, indent)
-
-    elif isinstance(node, Parameter):
-        out = '@' if node.isborrowed else ''
-        out += '.'if node.mononame else ''
-        out += node.name
-        print(start, out)
-
-    elif isinstance(node, ThreadID):
-        print(start, 'TID')
-
-    elif isinstance(node, NumThreads):
-        print(start, '#TID')
-
-    elif isinstance(node, Length):
-        print(start, "LENGTH")
-        display(node.lookup, indent)
-
-    elif isinstance(node, Let) or isinstance(node, Unlet):
-        print(start, type(node).__name__)
-        display(node.lookup, indent)
-        display(node.rhs, indent)
-
-    elif isinstance(node, list):
-        for elt in node:
-            display(elt, indent-1)
-
-    elif isinstance(node, dict):
-        for elt in node.values():
-            display(elt, indent-1)
-
-    elif isinstance(node, Print):
-        print(start, 'PRINT')
-        display(node.target, indent)
-
-    elif isinstance(node, If):
-        print(start, 'IF')
-        display(node.enter_expr, indent)
-        print(start, 'THEN')
-        display(node.lines, indent)
-        if node.else_lines:
-            print(start, 'ELSE')
-            display(node.else_lines, indent)
-        print(start, 'FI')
-        display(node.exit_expr, indent)
-
-    elif isinstance(node, Modop):
-        print(start, node.name)
-        display(node.lookup, indent)
-        display(node.expr, indent)
-
-    elif isinstance(node, Loop):
-        print(start, 'LOOP')
-        display(node.forward_condition, indent)
-        print(start, 'LOOP_BODY')
-        display(node.lines, indent)
-        print(start, 'WHILE')
-        display(node.backward_condition, indent)
-
-    elif isinstance(node, DoUndo):
-        print(start, 'DO')
-        display(node.do_lines, indent)
-        print(start, 'YIELD')
-        display(node.yield_lines, indent)
-        print(start, 'UNDO')
-
-    elif isinstance(node, Function):
-        print(start, "FUNC", node.name)
-        display(node.parameters, indent+1)
-        display(node.lines, indent+1)
-        print(start, "RETURN", node.retname)
-
-    elif isinstance(node, Module):
-        display(node.functions, indent)
-
-    else:
-        print("UNRECOGNISED NODE TYPE:", type(node))
