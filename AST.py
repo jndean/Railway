@@ -390,7 +390,7 @@ def display(node, indent=0):
     start = ' |' * indent + '->'
     indent += 1
 
-    if isinstance(node, BuiltinFraction):
+    if isinstance(node, Fraction):
         print(start, str(node))
 
     elif isinstance(node, Binop):
@@ -412,6 +412,12 @@ def display(node, indent=0):
         out += '.'if node.mononame else ''
         out += node.name
         print(start, out)
+
+    elif isinstance(node, ThreadID):
+        print(start, 'TID')
+
+    elif isinstance(node, NumThreads):
+        print(start, '#TID')
 
     elif isinstance(node, Length):
         print(start, "LENGTH")

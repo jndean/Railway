@@ -1,0 +1,151 @@
+@{from railwayparsergenerator import (
+    Token, ThreadID, NumThreads, Lookup, Length, Uniop, Binop, ArrayLiteral,
+    ArrayTensor, ArrayRange, Let, Unlet, Promote, Pop, Push, Swap, If, Loop,
+    For, Barrier, Mutex, Modop, Print, PrintLn, DoUndo, Catch, Try,
+    CallBlock, Parameter, Call, Function, Global, Import, Module, Fraction
+)}
+
+module : (import | global | func_decl)* ENDMARKER { Module(t0) };
+
+import : 'import' STRING ('as' name {t1})? NEWLINE { Import(t1, t2) };
+
+global : 'global' name ('=' expression {t1})? NEWLINE { Global(t1, t2) };
+
+func_decl : 'func' name param_tuple param_tuple NEWLINE
+                statement*
+            'return' param_tuple NEWLINE
+            { Function(t1, t2, t3, t5, t7) };
+
+statement : (let_stmt | unlet_stmt | promote_stmt | swap_stmt | push_stmt |
+             pop_stmt | if_stmt | loop_stmt | for_stmt | modify_stmt |
+             barrier_stmt | mutex_stmt | print_stmt | doundo_stmt | try_stmt |
+             catch_stmt | call_stmt) NEWLINE {t0};
+
+call_stmt : ((param_tuple '=>' {t0})?
+             (call_block ^ '=>')
+             ('=>' param_tuple {t1})?   { Call(t0, t1, t2) })
+          $
+            ((param_tuple '<=' {t0})?
+             (call_block ^ '<=')
+             ('<=' param_tuple {t1})?   { Call(t2, t1, t0) });
+
+call_block : ('call' | 'uncall')
+             name
+             ('{' expression '}' {t1})?
+             param_tuple
+             { CallBlock(t0, t1, t2, t3) };
+
+param_tuple : '(' parameter ^ ',' ')' {t1};
+
+try_stmt : 'try' '(' name 'in' expression ')' NEWLINE
+               statement*
+           'yrt'
+           { Try(t2, t4, t7) };
+
+catch_stmt : 'catch' '(' expression ')' { Catch(t2) };
+
+doundo_stmt : 'do' NEWLINE
+                  statement*
+              ('yield' NEWLINE
+                  statement* {t2})?
+              'undo'
+              { DoUndo(t2, t3) };
+
+print_stmt : 'print'   '(' (STRING | expression)^',' ')'  { Print(t2) }
+           | 'println' '(' (STRING | expression)^',' ')'  { PrintLn(t2) };
+
+barrier_stmt : 'barrier' STRING { Barrier(t1.string) };
+
+mutex_stmt : 'mutex' STRING NEWLINE
+                 statement*
+             'xetum'
+             { Mutex(t1.string, t3) };
+
+modify_stmt : lookup modop_symbol expression { Modop(t0, t1, t2) };
+
+for_stmt : 'for' '(' expression 'in' expression ')' NEWLINE
+               statement*
+            'rof'
+            { For(t2, t4, t7) };
+
+loop_stmt : 'loop' '(' expression ')' NEWLINE
+                statement*
+            'pool' '(' expression? ')'
+            { Loop(t2, t5, t8) };
+
+if_stmt : 'if' '(' expression ')' NEWLINE
+              statement*
+          ('else' NEWLINE
+              statement* {t2} )?
+          'fi' '(' expression? ')'
+          { If(t2, t5, t6, t9) };
+
+pop_stmt : 'pop' lookup '=>' lookup { Pop(t1, t3) }
+         | 'pop' lookup '<=' lookup { Pop(t3, t1) };
+
+push_stmt : 'push' lookup '=>' lookup { Push(t1, t3) }
+          | 'push' lookup '<=' lookup { Push(t3, t1) };
+
+swap_stmt : 'swap' lookup '<=>' lookup { Swap(t1, t3) };
+
+promote_stmt : 'promote' lookup '=>' lookup { Promote(t1, t3) }
+             | 'promote' lookup '<=' lookup { Promote(t3, t1) };
+
+let_stmt : 'let' name ('=' expression {t1})? { Let(t1, t2) };
+
+unlet_stmt : 'unlet' name ('=' expression {t1})? { Unlet(t1, t2) };
+
+expression : expression '|' expr0 { Binop(t0, t1, t2) }
+           | expr0;
+
+expr0 : expr0 '&' expr1 { Binop(t0, t1, t2) }
+      | expr1;
+
+expr1 : expr1 '^' expr2 { Binop(t0, t1, t2) }
+      | expr2;
+
+expr2 : expr2 ('<' | '<=' | '>' | '>=' | '==' | '!=' ) expr3 { Binop(t0, t1, t2) }
+      | expr3;
+
+expr3 : expr3 '+' expr4 { Binop(t0, t1, t2) }
+      | expr3 '-' expr4 { Binop(t0, t1, t2) }
+      | expr4 ;
+
+expr4 : expr4 '*'  expr5 { Binop(t0, t1, t2) }
+      | expr4 '/'  expr5 { Binop(t0, t1, t2) }
+      | expr4 '//' expr5 { Binop(t0, t1, t2) }
+      | expr4 '%'  expr5 { Binop(t0, t1, t2) }
+      | expr5 ;
+
+expr5 : expr5 '**' atom { Binop(t0, t1, t2) }
+       | atom ;
+
+atom : '(' expression ')'  { t1 }
+     | array_literal
+     | array_tensor
+     | array_range
+     | lookup
+     | NUMBER { Fraction(t0.string) }
+     | threadid
+     | numthreads
+     | '-' atom   { Uniop(t0, t1) }
+     | '!' atom   { Uniop(t0, t1) }
+     | '#' lookup { Length(t1) };
+
+array_literal : '[' expression ^ ',' ']' { ArrayLiteral(t1) };
+
+array_range : '[' expression 'to' expression ('by' expression {t1})? ']'
+                    { ArrayRange(t1, t3, t4) };
+
+array_tensor : '[' expression 'tensor' expression ']' { ArrayTensor(t1, t3) };
+
+lookup : name ( '[' expression ']' {t1} )* { Lookup(name=t0, index=tuple(t1)) };
+
+parameter : name { Parameter(t0) };
+
+threadid   : 'TID'  { ThreadID()   };
+numthreads : '#TID' { NumThreads() };
+
+name : '.'? NAME { ('.' if t0 is not None else '') + t1.string };
+
+modop_symbol : '+=' | '-=' | '*=' | '/=' | '//=' | '**=' | '%=' | '^=' | '|=' | '&=' ;

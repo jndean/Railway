@@ -1180,3 +1180,39 @@ inv_modops = {'MODADD': modops['MODSUB'],
               'MODSUB': modops['MODADD'],
               'MODMUL': modops['MODDIV'],
               'MODDIV': modops['MODMUL']}
+
+_binops = {'+': lambda a, b: a + b,
+           '-': lambda a, b: a - b,
+           '*': lambda a, b: a * b,
+           '/': lambda a, b: a / b,
+           '**': lambda a, b: a ** b,
+           '//': lambda a, b: a // b,
+           '%': lambda a, b: a % b,
+           '^': lambda a, b: bool(a) ^ bool(b),
+           '|': lambda a, b: bool(a) | bool(b),
+           '&': lambda a, b: bool(a) & bool(b),
+           '<': lambda a, b: a < b,
+           '<=': lambda a, b: a <= b,
+           '>': lambda a, b: a > b,
+           '>=': lambda a, b: a >= b,
+           '==': lambda a, b: a == b,
+           '!=': lambda a, b: a != b}
+
+_uniops = {'!': lambda x: not bool(x),
+           '-': lambda x: -x}
+
+_modops = {'+=': _binops['+'],
+           '-=': _binops['-'],
+           '*=': __modop_mul,
+           '/=': __modop_div,
+           '//=': _binops['//'],
+           '**=': _binops['**'],
+           '%=': _binops['%'],
+           '^=': _binops['^'],
+           '|=': _binops['|'],
+           '&=': _binops['&']}
+
+_inv_modops = {'+=': _modops['-='],
+               '-=': _modops['+='],
+               '*=': _modops['/='],
+               '/=': _modops['*=']}
