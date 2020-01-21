@@ -166,6 +166,14 @@ class ArrayLiteral:
     def __repr__(self):
         return repr(self.items)
 
+    def compile(self):
+        items = [i.compile() for i in self.items]
+        hasmono = any(i.hasmono for i in items)
+        unowned = all(isinstance(i, interpreter.Fraction) or
+                      (hasattr(i, 'unowned') and i.unowned)
+                      for i in items)
+        return interpreter.ArrayLiteral(items, hasmono=hasmono, unowned=unowned)
+
 
 class ArrayRange:
     __slots__ = ['start', 'stop', 'step']
@@ -179,6 +187,15 @@ class ArrayRange:
         by_str = '' if self.step is None else f' by {self.step}'
         return f'[{self.start} to {self.stop}{by_str}]'
 
+    def compile(self):
+        step = (interpreter.Fraction(1) if self.step is None
+                else self.step.compile())
+        start = self.start.compile()
+        stop = self.stop.compile()
+        hasmono = start.hasmono or stop.hasmono or step.hasmono
+        return interpreter.ArrayRange(start, stop, step,
+                                      hasmono=hasmono, unowned=True)
+
 
 class ArrayTensor:
     __slots__ = ['fill_expr', 'dims_expr']
@@ -190,29 +207,69 @@ class ArrayTensor:
     def __repr__(self):
         return f'[{self.fill_expr} tensor {self.dims_expr}]'
 
+    def compile(self):
+        fill_expr = self.fill_expr.compile()
+        dims_expr = self.dims_expr.compile()
+        hasmono = fill_expr.hasmono or dims_expr.hasmono
+        return interpreter.ArrayTensor(fill_expr, dims_expr,
+                                       hasmono=hasmono, unowned=True)
+
 
 class Let:
-    __slots__ = ['lhs', 'rhs']
+    __slots__ = ['name', 'rhs']
 
-    def __init__(self, lhs, rhs):
-        self.lhs = lhs
+    def __init__(self, name, rhs):
+        self.name = name
         self.rhs = rhs
 
     def __repr__(self):
         assignment = f' = {self.rhs}' if self.rhs is not None else' '
-        return f'let {self.lhs}{assignment}'
+        return f'let {self.name}{assignment}'
+
+    def compile(self):
+        rhs = (interpreter.Fraction(0) if self.rhs is None
+               else self.rhs.compile())
+        mononame = (self.name[0] == '.')
+        modreverse = not mononame
+        ismono = mononame or rhs.hasmono
+        if ismono and not mononame:
+            raise RailwayIllegalMono(f'Letting non-mono "{self.name}" '
+                                     'using mono information')
+        if rhs.uses_var(self.name):
+            raise RailwayCircularDefinition(f'Variable "{self.name}" is used '
+                                            'during its own initialisation')
+        lhs = interpreter.Lookup(self.name, index=tuple(),
+                                 hasmono=mononame, mononame=mononame)
+        return interpreter.Let(lhs, rhs, ismono=ismono, modreverse=modreverse)
 
 
 class Unlet:
-    __slots__ = ['lhs', 'rhs']
+    __slots__ = ['name', 'rhs']
 
-    def __init__(self, lhs, rhs):
-        self.lhs = lhs
+    def __init__(self, name, rhs):
+        self.name = name
         self.rhs = rhs
 
     def __repr__(self):
         assignment = f' = {self.rhs}' if self.rhs is not None else' '
-        return f'unlet {self.lhs}{assignment}'
+        return f'unlet {self.name}{assignment}'
+
+    def compile(self):
+        rhs = (interpreter.Fraction(0) if self.rhs is None
+               else self.rhs.compile())
+        mononame = self.name[0] == '.'
+        ismono = mononame or rhs.hasmono
+        modreverse = not mononame
+        if ismono and not mononame:
+            raise RailwayIllegalMono(f'Unletting "{self.name}" '
+                                     'using mono information')
+        if rhs.uses_var(self.name):
+            raise RailwayCircularDefinition(f'Variable "{self.name}" is used '
+                                            'during its own unlet')
+        lhs = interpreter.Lookup(self.name, index=tuple(),
+                                 hasmono=mononame, mononame=mononame)
+        return interpreter.Unlet(
+            lhs, rhs, ismono=ismono, modreverse=modreverse)
 
 
 class Promote:
@@ -225,6 +282,17 @@ class Promote:
     def __repr__(self):
         return f'promote {self.src_name} => {self.dst_name}'
 
+    def compile(self):
+        if self.src_name[0] != '.':
+            raise RailwayExpectedMono(
+                f'Promoting non-mono variable "{self.src_name}"')
+        if self.dst_name[0] == '.':
+            raise RailwayIllegalMono(
+                f'Promoting to mono variable "{self.dst_name}"')
+        return interpreter.Promote(
+            src_name=self.src_name, dst_name=self.dst_name,
+            modreverse=True, ismono=False)
+
 
 class Push:
     __slots__ = ['src_lookup', 'dst_lookup']
@@ -235,6 +303,32 @@ class Push:
 
     def __repr__(self):
         return f'push {self.src_lookup} => {self.dst_lookup}'
+
+    def compile(self):
+        src, dst = self.src_lookup.compile(), self.dst_lookup.compile()
+        ismono = src.hasmono or dst.hasmono
+        modreverse = (not src.mononame) or (not dst.mononame)
+        if ((not dst.mononame) and
+                (src.uses_var(dst.name) or
+                 any(i.uses_var(dst.name) for i in dst.index))):
+            raise RailwaySelfmodification('Push statment modifies variable '
+                                          f'"{dst.name}" using itself')
+        if src.index:
+            raise RailwayTypeError(f'Pushing an element of array "{src.name}" '
+                                   'would cause aliasing')
+        if ((not src.mononame) and
+                (any(i.uses_var(src.name) for i in dst.index))):
+            raise RailwaySelfmodification(
+                f'Push source variable "{src.name}" is used in the destination '
+                f'{self.dst_lookup}')
+        if (not dst.hasmono) and ismono:
+            raise RailwayIllegalMono(
+                f'Pushing onto non-mono "{dst.name}" using mono information')
+        if (not src.hasmono) and ismono:
+            raise RailwayIllegalMono(
+                f'Pushing non-mono "{src.name}" using mono information')
+        return interpreter.Push(src_lookup=src, dst_lookup=dst, ismono=ismono,
+                                modreverse=modreverse)
 
 
 class Pop:
@@ -247,6 +341,25 @@ class Pop:
     def __repr__(self):
         return f'pop {self.src_lookup} => {self.dst_lookup}'
 
+    def compile(self):
+        src, dst = self.src_lookup.compile(), self.dst_lookup.compile()
+        ismono = src.hasmono or dst.hasmono
+        modreverse = (not src.mononame) or (not dst.mononame)
+        if dst.index:
+            raise RailwayTypeError(
+                f'Pop destination "{dst}" should be a name (not have indices)')
+        if any(i.uses_var(src.name) for i in src.index):
+            raise RailwaySelfmodification('Pop statment modifies variable '
+                                          f'"{src.name}" using itself')
+        if (not dst.mononame) and ismono:
+            raise RailwayIllegalMono(
+                f'Pop creates non-mono "{dst.name}" using mono information')
+        if (not src.mononame) and ismono:
+            raise RailwayIllegalMono(
+                f'Pop modifies non-mono "{src.name}" using mono information')
+        return interpreter.Pop(src_lookup=src, dst_lookup=dst, ismono=ismono,
+                               modreverse=modreverse)
+
 
 class Swap:
     __slots__ = ['lhs', 'rhs']
@@ -257,6 +370,32 @@ class Swap:
 
     def __repr__(self):
         return f'swap {self.lhs} <=> {self.rhs}'
+
+    def compile(self):
+        lhs, rhs = self.lhs.compile(), self.rhs.compile()
+        ismono = lhs.hasmono or rhs.hasmono
+        modreverse = not (lhs.mononame and rhs.mononame)
+        if ismono and modreverse:
+            raise RailwayIllegalMono(f'Using mono information to swap non-mono '
+                                     f'"{lhs} <=> {rhs}"')
+        if (any(idx.uses_var(rhs.name) for idx in lhs.index) or
+                any(idx.uses_var(lhs.name) for idx in rhs.index)):
+            raise RailwaySelfmodification(
+                'Swap uses information from one side as an index on the other '
+                f'"{lhs} <=> {rhs}"')
+        if lhs.index:
+            *lhs_idx, lhs_tail = lhs.index
+            lhs.index = lhs_idx
+        else:
+            lhs_tail = None
+        if rhs.index:
+            *rhs_idx, rhs_tail = rhs.index
+            rhs.index = rhs_idx
+        else:
+            rhs_tail = None
+        return interpreter.Swap(lhs_lookup=lhs, rhs_lookup=rhs,
+                                lhs_idx=lhs_tail, rhs_idx=rhs_tail,
+                                ismono=ismono, modreverse=modreverse)
 
 
 class If:

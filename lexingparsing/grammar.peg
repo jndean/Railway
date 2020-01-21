@@ -88,8 +88,8 @@ push_stmt : 'push' lookup '=>' lookup { Push(t1, t3) }
 
 swap_stmt : 'swap' lookup '<=>' lookup { Swap(t1, t3) };
 
-promote_stmt : 'promote' lookup '=>' lookup { Promote(t1, t3) }
-             | 'promote' lookup '<=' lookup { Promote(t3, t1) };
+promote_stmt : 'promote' name '=>' name { Promote(t1, t3) }
+             | 'promote' name '<=' name { Promote(t3, t1) };
 
 let_stmt : 'let' name ('=' expression {t1})? { Let(t1, t2) };
 

@@ -766,18 +766,18 @@ class RailwayParser(BaseParser):
         pos = self.mark()
         if (True
             and ((t0 := self.expect('promote')) is not None)
-            and ((t1 := self.rule_lookup()) is not None)
+            and ((t1 := self.rule_name()) is not None)
             and ((t2 := self.expect('=>')) is not None)
-            and ((t3 := self.rule_lookup()) is not None)
+            and ((t3 := self.rule_name()) is not None)
         ):
             return Promote(t1, t3)
         self.reset(pos)
 
         if (True
             and ((t0 := self.expect('promote')) is not None)
-            and ((t1 := self.rule_lookup()) is not None)
+            and ((t1 := self.rule_name()) is not None)
             and ((t2 := self.expect('<=')) is not None)
-            and ((t3 := self.rule_lookup()) is not None)
+            and ((t3 := self.rule_name()) is not None)
         ):
             return Promote(t3, t1)
         self.reset(pos)

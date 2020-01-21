@@ -131,6 +131,9 @@ class ArrayLiteral(ExpressionNode):
     def uses_var(self, name):
         return any(x.uses_var(name) for x in self.items)
 
+    def __repr__(self):
+        return repr(self.items)
+
 
 class ArrayRange(ExpressionNode):
     __slots__ = ["start", "stop", "step", "unowned"]
@@ -147,6 +150,10 @@ class ArrayRange(ExpressionNode):
                 or self.step.uses_var(name)
                 or self.stop.uses_var(name))
 
+    def __repr__(self):
+        by_str = '' if self.step is None else f' by {self.step}'
+        return f'[{self.start} to {self.stop}{by_str}]'
+
 
 class ArrayTensor(ExpressionNode):
     __slots__ = ["fill_expr", "dims_expr", "unowned"]
@@ -161,6 +168,9 @@ class ArrayTensor(ExpressionNode):
         return (self.dims_expr.uses_var(name)
                 or self.fill_expr.uses_var(name))
 
+    def __repr__(self):
+        return f'[{self.fill_expr} tensor {self.dims_expr}]'
+
 
 class ThreadID(ExpressionNode):
     __slots__ = []
@@ -170,6 +180,9 @@ class ThreadID(ExpressionNode):
 
     def uses_var(self, name):
         return False
+
+    def __repr__(self):
+        return 'TID()'
 
 
 class NumThreads(ExpressionNode):
@@ -181,6 +194,9 @@ class NumThreads(ExpressionNode):
     def uses_var(self, name):
         return False
 
+    def __repr__(self):
+        return '#TID()'
+
 
 class Let(StatementNode):
     __slots__ = ["lookup", "rhs"]
@@ -189,6 +205,10 @@ class Let(StatementNode):
         super().__init__(**kwargs)
         self.lookup = lookup
         self.rhs = rhs
+
+    def __repr__(self):
+        assignment = f' = {self.rhs}' if self.rhs is not None else ' '
+        return f'let {self.lookup}{assignment}'
 
 
 class Unlet(StatementNode):
@@ -199,6 +219,10 @@ class Unlet(StatementNode):
         self.lookup = lookup
         self.rhs = rhs
 
+    def __repr__(self):
+        assignment = f' = {self.rhs}' if self.rhs is not None else' '
+        return f'unlet {self.lookup}{assignment}'
+
 
 class Promote(StatementNode):
     __slots__ = ["src_name", "dst_name"]
@@ -207,6 +231,9 @@ class Promote(StatementNode):
         super().__init__(**kwargs)
         self.src_name = src_name
         self.dst_name = dst_name
+
+    def __repr__(self):
+        return f'promote {self.src_name} => {self.dst_name}'
 
 
 class Push(StatementNode):
@@ -217,6 +244,9 @@ class Push(StatementNode):
         self.src_lookup = src_lookup
         self.dst_lookup = dst_lookup
 
+    def __repr__(self):
+        return f'push {self.src_lookup} => {self.dst_lookup}'
+
 
 class Pop(StatementNode):
     __slots__ = ["src_lookup", "dst_lookup"]
@@ -225,6 +255,9 @@ class Pop(StatementNode):
         super().__init__(**kwargs)
         self.src_lookup = src_lookup
         self.dst_lookup = dst_lookup
+
+    def __repr__(self):
+        return f'pop {self.src_lookup} => {self.dst_lookup}'
 
 
 class Swap(StatementNode):
@@ -236,6 +269,12 @@ class Swap(StatementNode):
         self.rhs_lookup = rhs_lookup
         self.lhs_idx = lhs_idx
         self.rhs_idx = rhs_idx
+
+    def __repr__(self):
+        lhs, rhs = repr(self.lhs_lookup), repr(self.rhs_lookup)
+        lhs += f'[{self.lhs_idx}]'if self.lhs_idx is not None else ''
+        rhs += f'[{self.rhs_idx}]' if self.rhs_idx is not None else ''
+        return f'swap {lhs} <=> {rhs}'
 
 
 class Modop(StatementNode):
