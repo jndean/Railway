@@ -1,1 +1,8 @@
-push x => array
+import "abc/tmp"
+
+func main(argv)()
+
+ let x
+ unlet y
+
+return ()

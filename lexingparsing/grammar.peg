@@ -7,7 +7,7 @@
 
 module : (import | global | func_decl)* ENDMARKER { Module(t0) };
 
-import : 'import' STRING ('as' name {t1})? NEWLINE { Import(t1, t2) };
+import : 'import' STRING ('as' name {t1})? NEWLINE { Import(t1.string, t2) };
 
 global : 'global' name ('=' expression {t1})? NEWLINE { Global(t1, t2) };
 

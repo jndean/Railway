@@ -1,4 +1,6 @@
+from collections import Counter
 from fractions import Fraction as BuiltinFraction
+from os.path import split as os_split
 
 import interpreting as interpreter
 
@@ -408,11 +410,30 @@ class If:
         self.exit_expr = exit_expr
 
     def __repr__(self):
-        lines = [f'if ({self.enter_expr})'] + [repr(l) for l in self.lines]
+        lines = [f'if ({self.enter_expr})'] + [repr(ln) for ln in self.lines]
         if self.else_lines is not None:
-            lines += ['else'] + [repr(l) for l in self.else_lines]
+            lines += ['else'] + [repr(ln) for ln in self.else_lines]
         lines.append(f'fi ({self.exit_expr})')
         return '\n'.join(lines)
+
+    def compile(self):
+        enter_expr = self.enter_expr.compile()
+        exit_expr = (self.exit_expr.compile() if self.exit_expr is not None
+                     else enter_expr)
+        lines = [ln.compile() for ln in self.lines]
+        else_lines = ([ln.compile() for ln in self.else_lines]
+                      if self.else_lines is not None else [])
+        ismono = enter_expr.hasmono or exit_expr.hasmono
+        if ismono and (exit_expr is not enter_expr):
+            raise RailwaySyntaxError('Provided a reverse condition for a mono-'
+                                     'directional if-statement')
+        modreverse = any(i.modreverse for i in lines + else_lines)
+        if ismono and modreverse:
+            raise RailwayIllegalMono(
+                'Using mono information in a branch condition which affects a '
+                'non-mono variable')
+        return interpreter.If(enter_expr, lines, else_lines, exit_expr,
+                              ismono=ismono, modreverse=modreverse)
 
 
 class Loop:
@@ -425,8 +446,26 @@ class Loop:
 
     def __repr__(self):
         return '\n'.join([f'loop ({self.forward_condition})'] +
-                         [repr(l) for l in self.lines] +
+                         [repr(ln) for ln in self.lines] +
                          [f'pool ({self.backward_condition})'])
+
+    def compile(self):
+        forward_condition = self.forward_condition.compile()
+        lines = [ln.compile() for ln in self.lines]
+        backward_condition = self.backward_condition
+        if backward_condition is not None:
+            backward_condition = backward_condition.compile()
+        ismono = (forward_condition.hasmono or
+            (backward_condition is not None and backward_condition.hasmono))
+        if ismono == (backward_condition is not None):
+            raise RailwaySyntaxError('A loop should have a reverse condition '
+                                     'if and only if it is bi-directional')
+        modreverse = any(i.modreverse for i in lines)
+        if ismono and modreverse:
+            raise RailwayIllegalMono('Loop condition uses mono information '
+                                     'and the body modifies a non-mono var')
+        return interpreter.Loop(forward_condition, lines, backward_condition,
+                                ismono=ismono, modreverse=modreverse)
 
 
 class For:
@@ -439,8 +478,25 @@ class For:
 
     def __repr__(self):
         return '\n'.join([f'for ({self.lookup} in {self.iterator})'] +
-                         [repr(l) for l in self.lines] +
+                         [repr(ln) for ln in self.lines] +
                          ['rof'])
+
+    def compile(self):
+        lookup = self.lookup.compile()
+        iterator = self.iterator.compile()
+        lines = [ln.compile() for ln in self.lines]
+        modreverse = any(ln.modreverse for ln in lines)
+        if iterator.hasmono and not lookup.mononame:
+            raise RailwayIllegalMono(
+                f'For loop uses non-mono name "{lookup.name}" for elements in a'
+                ' mono iterator')
+        # Using a mono varname and non-mono iterator needn't be mono
+        ismono = iterator.hasmono
+        if ismono and modreverse:
+            raise RailwayIllegalMono('For loop is mono-directional but modifies'
+                                     ' non-mono variables')
+        return interpreter.For(lookup=lookup, iterator=iterator, lines=lines,
+                               ismono=ismono, modreverse=modreverse)
 
 
 class Modop:
@@ -454,6 +510,29 @@ class Modop:
     def __repr__(self):
         return f'{self.lookup} {self.op} {self.expr}'
 
+    def compile(self):
+        lookup = self.lookup.compile()
+        expr = self.expr.compile()
+        op_name = self.op.type
+        op = interpreter._modops[op_name]
+        ismono = lookup.hasmono or expr.hasmono
+        if (not ismono) and op_name not in interpreter._inv_modops:
+            raise RailwayNoninvertibleModification(
+                f'Performing non-invertible operation {op_name} on non-mono '
+                f'variable "{lookup.name}"')
+        inv_op = None if ismono else interpreter._inv_modops[op_name]
+        modreverse = not lookup.mononame
+        if ismono and modreverse:
+            raise RailwayIllegalMono(
+                f'Modifying non-mono variable "{lookup.name}" '
+                'using mono information')
+        if (any(i.uses_var(lookup.name) for i in lookup.index)
+                or expr.uses_var(lookup.name)):
+            raise RailwaySelfmodification(
+                f'Statement uses "{lookup.name}" to modify itself')
+        return interpreter.Modop(lookup, op, inv_op, expr, op_name,
+                                 ismono=ismono, modreverse=modreverse)
+
 
 class Barrier:
     __slots__ = ['name']
@@ -462,7 +541,11 @@ class Barrier:
         self.name = name
 
     def __repr__(self):
-        return f'barrier {self.name}'
+        return f'barrier "{self.name}"'
+
+    def compile(self):
+        return interpreter.Barrier(
+            name=self.name, ismono=False, modreverse=False)
 
 
 class Mutex:
@@ -473,9 +556,14 @@ class Mutex:
         self.lines = lines
 
     def __repr__(self):
-        return '\n'.join([f'mutex {self.name}'] +
-                         [repr(l) for l in self.lines] +
+        return '\n'.join([f'mutex "{self.name}"'] +
+                         [repr(ln) for ln in self.lines] +
                          ['xetum'])
+
+    def compile(self):
+        return interpreter.Mutex(
+            name=self.name, lines=[ln.compile() for ln in self.lines],
+            ismono=False, modreverse=True)
 
 
 class PrintLn:
@@ -487,6 +575,13 @@ class PrintLn:
     def __repr__(self):
         return f'println({", ".join(repr(i) for i in self.items)})'
 
+    def compile(self):
+        items = [(i.string if isinstance(i, Token) else i.compile())
+                 for i in self.items]
+        ismono = any((not isinstance(i, str)) and i.hasmono
+                     for i in items)
+        return interpreter.PrintLn(items, ismono=ismono, modreverse=False)
+
 
 class Print:
     __slots__ = ['items']
@@ -497,6 +592,13 @@ class Print:
     def __repr__(self):
         return f'print({", ".join(repr(i) for i in self.items)})'
 
+    def compile(self):
+        items = [(i.string if isinstance(i, Token) else i.compile())
+                 for i in self.items]
+        ismono = any((not isinstance(i, str)) and i.hasmono
+                     for i in items)
+        return interpreter.Print(items, ismono=ismono, modreverse=False)
+
 
 class DoUndo:
     __slots__ = ['do_lines', 'yield_lines']
@@ -506,11 +608,19 @@ class DoUndo:
         self.yield_lines = yield_lines
 
     def __repr__(self):
-        lines = ['do'] + [repr(l) for l in self.do_lines]
+        lines = ['do'] + [repr(ln) for ln in self.do_lines]
         if self.yield_lines:
-            lines += ['yield'] + [repr(l) for l in self.yield_lines]
+            lines += ['yield'] + [repr(ln) for ln in self.yield_lines]
         lines.append('undo')
         return '\n'.join(lines)
+
+    def compile(self):
+        do_lines = [ln.compile() for ln in self.do_lines]
+        yield_lines = ([] if self.yield_lines is None
+                       else [ln.compile() for ln in self.yield_lines])
+        modreverse = any(i.modreverse for i in do_lines + yield_lines)
+        return interpreter.DoUndo(do_lines, yield_lines,
+                                  ismono=False, modreverse=modreverse)
 
 
 class Try:
@@ -523,8 +633,22 @@ class Try:
 
     def __repr__(self):
         return '\n'.join([f'try ({self.name} in {self.iterator})'] +
-                         [repr(l) for l in self.lines] +
+                         [repr(ln) for ln in self.lines] +
                          ['yrt'])
+
+    def compile(self):
+        iterator = self.iterator.compile()
+        lines = [ln.compile() for ln in self.lines]
+        if self.name[0] == '.':
+            raise RailwayIllegalMono(
+                f'Try statement assigns to mono name "{self.name}"')
+        if iterator.hasmono:
+            raise RailwayIllegalMono(f'Try statement has mono-directional '
+                                     f'information in its iterator')
+        lookup = interpreter.Lookup(name=self.name, index=tuple(),
+                                    mononame=False, hasmono=False)
+        return interpreter.Try(lookup=lookup, iterator=iterator, lines=lines,
+                               ismono=False, modreverse=True)
 
 
 class Catch:
@@ -535,6 +659,10 @@ class Catch:
 
     def __repr__(self):
         return f'catch ({self.expr})'
+
+    def compile(self):
+        return interpreter.Catch(
+            self.expr.compile(), modreverse=False, ismono=True)
 
 
 class CallBlock:
@@ -548,10 +676,24 @@ class CallBlock:
 
     def __repr__(self):
         out = f'{self.call} {self.name}'
-        if self.num_threads:
+        if self.num_threads is not None:
             out += '{' + repr(self.num_threads) + '}'
         out += f'({", ".join(repr(p) for p in self.borrowed_params)})'
         return out
+
+    def compile(self):
+        isuncall = self.call.string == 'uncall'
+        borrowed_params = [p.compile() for p in self.borrowed_params]
+        num_threads = (self.num_threads.compile()
+                       if self.num_threads is not None else None)
+        param_counts = Counter(p.name for p in borrowed_params)
+        if len(param_counts) != len(borrowed_params):
+            dup, count = param_counts.most_common(1)[0]
+            raise RailwayNameConflict(
+                f'{self.call.string} to function "{self.name}" borrows '
+                f'parameter "{dup}" {count} times')
+        return interpreter.CallBlock(
+            isuncall, self.name, num_threads, borrowed_params)
 
 
 class Call:
@@ -565,11 +707,22 @@ class Call:
     def __repr__(self):
         out = ''
         if self.in_params:
-            out += f'({", ".join(repr(l) for l in self.in_params)}) => '
+            out += f'({", ".join(repr(ln) for ln in self.in_params)}) => '
         out += ' => '.join(repr(c) for c in self.calls)
         if self.out_params:
-            out += f' => ({", ".join(repr(l) for l in self.out_params)})'
+            out += f' => ({", ".join(repr(ln) for ln in self.out_params)})'
         return out
+
+    def compile(self):
+        in_params = ([p.compile() for p in self.in_params]
+                     if self.in_params is not None else [])
+        out_params = ([p.compile() for p in self.out_params]
+                      if self.out_params is not None else [])
+        calls = [c.compile() for c in self.calls]
+        modreverse = any(call.name[0] != '.' for call in calls)
+        ismono = not modreverse
+        return interpreter.CallChain(in_params, calls, out_params,
+                                     modreverse=modreverse, ismono=ismono)
 
 
 class Function:
@@ -586,9 +739,40 @@ class Function:
         out = f'func {self.name}('
         out += ', '.join(repr(p) for p in self.borrowed_params) + ')('
         out += ', '.join(repr(p) for p in self.in_params) + ')\n'
-        out += '\n'.join(repr(l) for l in self.lines) + '\n'
+        out += '\n'.join(repr(ln) for ln in self.lines) + '\n'
         out += 'return (' + ', '.join(repr(p) for p in self.out_params) + ')'
         return out
+
+    def compile(self):
+        lines = [ln.compile() for ln in self.lines]
+        borrowed_params = [p.compile() for p in self.borrowed_params]
+        in_params = ([p.compile() for p in self.in_params]
+                     if self.in_params is not None else [])
+        out_params = ([p.compile() for p in self.out_params]
+                      if self.out_params is not None else [])
+        modreverse = any(ln.modreverse for ln in lines)
+        if modreverse == (self.name[0] == '.'):
+            if modreverse:
+                raise RailwayIllegalMono(f'Function "{self.name}" is marked as '
+                                         'mono but modifies non-mono variables')
+            else:
+                raise RailwayExpectedMono(f'Function "{self.name}" modifies no '
+                                          'non-mono variables, so should be '
+                                          'marked as mono')
+        in_counts = Counter(p.name for p in borrowed_params + in_params)
+        out_counts = Counter(p.name for p in out_params)
+        if len(in_counts) != len(borrowed_params) + len(in_params):
+            dup, count = in_counts.most_common(1)[0]
+            raise RailwayNameConflict(
+                f'Parameter "{dup}" appears {count} times in the signature of '
+                f'function "{self.name}"')
+        if len(out_counts) != len(out_params):
+            dup, count = out_counts.most_common(1)[0]
+            raise RailwayNameConflict(f'Parameter "{dup}" is returned {count} '
+                                      f'times by function "{self.name}"')
+        return interpreter.Function(
+            self.name, lines, modreverse, borrowed_params, in_params, out_params
+        )
 
 
 class Global:
@@ -604,6 +788,19 @@ class Global:
             out += f' = {self.expression}'
         return out
 
+    def compile(self):
+        expr = (self.expression.compile() if self.expression is not None
+                else interpreter.Fraction(0))
+        if expr.uses_var(self.name):
+            raise RailwayCircularDefinition(f'Variable "{self.name}" is used '
+                                            'during its own initialisation')
+        if self.name[0] == '.':
+            raise RailwayIllegalMono(
+                f'Global variable "{self.name}" cannot be mono')
+        lookup = interpreter.Lookup(name=self.name, index=tuple(),
+                                    mononame=False, hasmono=False)
+        return interpreter.Global(lookup, expr)
+
 
 class Import:
     __slots__ = ['path', 'name']
@@ -618,6 +815,14 @@ class Import:
             out += f' as {self.name}'
         return out
 
+    def compile(self):
+        filename = self.path
+        if filename[-5:] != '.rail':
+            filename += '.rail'
+        alias = (os_split(filename)[-1][:-5] if self.name is None
+                 else self.name)
+        return interpreter.Import(filename=filename, alias=alias)
+
 
 class Module:
     __slots__ = ['items']
@@ -627,3 +832,17 @@ class Module:
 
     def __repr__(self):
         return '\n'.join(repr(i) for i in self.items)
+
+    def compile(self):
+        items = [i.compile() for i in self.items]
+        extern_funcs = {}  # Temporary?
+        funcs, global_lines = {}, []
+        for item in items:
+            if isinstance(item, interpreter.Function):
+                if item.name in extern_funcs or item.name in funcs:
+                    raise RailwayDuplicateDefinition(
+                        f'Function {item.name} has multiple definitions')
+                funcs[item.name] = item
+            else:
+                global_lines.append(item)
+        return interpreter.Module(funcs, global_lines)

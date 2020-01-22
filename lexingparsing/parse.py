@@ -73,7 +73,7 @@ class RailwayParser(BaseParser):
             and (((t2 := self.rule_3()) is not None) or True)
             and ((t3 := self.expect('NEWLINE')) is not None)
         ):
-            return Import(t1, t2)
+            return Import(t1.string, t2)
         self.reset(pos)
 
         return None

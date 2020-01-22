@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from fractions import Fraction as BuiltinFraction
+import itertools
 
 
 binops = dict((k, None) for k in [
@@ -288,6 +289,9 @@ class Modop(StatementNode):
         self.expr = expr
         self.name = name
 
+    def __repr__(self):
+        return f'{self.lookup} {self.name} {self.expr}'
+
 
 class If(StatementNode):
     __slots__ = ["enter_expr", "lines", "else_lines", "exit_expr"]
@@ -299,6 +303,13 @@ class If(StatementNode):
         self.else_lines = else_lines
         self.exit_expr = exit_expr
 
+    def __repr__(self):
+        lines = [f'if ({self.enter_expr})'] + [repr(ln) for ln in self.lines]
+        if self.else_lines is not None:
+            lines += ['else'] + [repr(ln) for ln in self.else_lines]
+        lines.append(f'fi ({self.exit_expr})')
+        return '\n'.join(lines)
+
 
 class Loop(StatementNode):
     __slots__ = ["forward_condition", "lines", "backward_condition"]
@@ -308,6 +319,11 @@ class Loop(StatementNode):
         self.forward_condition = forward_condition
         self.lines = lines
         self.backward_condition = backward_condition
+
+    def __repr__(self):
+        return '\n'.join([f'loop ({self.forward_condition})'] +
+                         [repr(ln) for ln in self.lines] +
+                         [f'pool ({self.backward_condition})'])
 
 
 class For(StatementNode):
@@ -319,6 +335,11 @@ class For(StatementNode):
         self.iterator = iterator
         self.lines = lines
 
+    def __repr__(self):
+        return '\n'.join([f'for ({self.lookup} in {self.iterator})'] +
+                         [repr(ln) for ln in self.lines] +
+                         ['rof'])
+
 
 class DoUndo(StatementNode):
     __slots__ = ["do_lines", "yield_lines"]
@@ -327,6 +348,13 @@ class DoUndo(StatementNode):
         super().__init__(**kwargs)
         self.do_lines = do_lines
         self.yield_lines = yield_lines
+
+    def __repr__(self):
+        lines = ['do'] + [repr(ln) for ln in self.do_lines]
+        if self.yield_lines:
+            lines += ['yield'] + [repr(ln) for ln in self.yield_lines]
+        lines.append('undo')
+        return '\n'.join(lines)
 
 
 class Barrier(StatementNode):
@@ -337,6 +365,9 @@ class Barrier(StatementNode):
         super().__init__(**kwargs)
         self.name = name
 
+    def __repr__(self):
+        return f'barrier "{self.name}"'
+
 
 class Mutex(StatementNode):
     __slots__ = ["name", "lines"]
@@ -345,6 +376,11 @@ class Mutex(StatementNode):
         super().__init__(**kwargs)
         self.name = name
         self.lines = lines
+
+    def __repr__(self):
+        return '\n'.join([f'mutex "{self.name}"'] +
+                         [repr(ln) for ln in self.lines] +
+                         ['xetum'])
 
 
 class Try(StatementNode):
@@ -356,6 +392,11 @@ class Try(StatementNode):
         self.iterator = iterator
         self.lines = lines
 
+    def __repr__(self):
+        return '\n'.join([f'try ({self.lookup} in {self.iterator})'] +
+                         [repr(ln) for ln in self.lines] +
+                         ['yrt'])
+
 
 class Catch(StatementNode):
     __slots__ = ["expression"]
@@ -363,6 +404,9 @@ class Catch(StatementNode):
     def __init__(self, expression, **kwargs):
         super().__init__(**kwargs)
         self.expression = expression
+
+    def __repr__(self):
+        return f'catch ({self.expression})'
 
 
 class Print(StatementNode):
@@ -372,6 +416,9 @@ class Print(StatementNode):
         super().__init__(**kwargs)
         self.targets = targets
 
+    def __repr__(self):
+        return f'print({", ".join(repr(t) for t in self.targets)})'
+
 
 class PrintLn(StatementNode):
     __slots__ = ["targets"]
@@ -379,6 +426,9 @@ class PrintLn(StatementNode):
     def __init__(self, targets, **kwargs):
         super().__init__(**kwargs)
         self.targets = targets
+
+    def __repr__(self):
+        return f'println({", ".join(repr(t) for t in self.targets)})'
 
 
 class Global:
@@ -388,6 +438,12 @@ class Global:
         self.lookup = lookup
         self.rhs = rhs
 
+    def __repr__(self):
+        out = f'global {self.lookup}'
+        if self.rhs is not None:
+            out += f' = {self.rhs}'
+        return out
+
 
 class Import:
     __slots__ = ["filename", "alias"]
@@ -395,6 +451,12 @@ class Import:
     def __init__(self, filename, alias):
         self.filename = filename
         self.alias = alias
+
+    def __repr__(self):
+        out = f'import "{self.filename}"'
+        if self.alias is not None:
+            out += f' as {self.alias}'
+        return out
 
 
 class CallBlock:
@@ -406,6 +468,13 @@ class CallBlock:
         self.num_threads = num_threads
         self.borrowed_params = borrowed_params
 
+    def __repr__(self):
+        out = ('uncall' if self.isuncall else 'call') + ' ' + self.name
+        if self.num_threads is not None:
+            out += '{' + repr(self.num_threads) + '}'
+        out += f'({", ".join(repr(p) for p in self.borrowed_params)})'
+        return out
+
 
 class CallChain(StatementNode):
     __slots__ = ["in_params", "calls", "out_params"]
@@ -415,6 +484,15 @@ class CallChain(StatementNode):
         self.in_params = in_params
         self.calls = calls
         self.out_params = out_params
+
+    def __repr__(self):
+        out = ''
+        if self.in_params:
+            out += f'({", ".join(repr(ln) for ln in self.in_params)}) => '
+        out += ' => '.join(repr(c) for c in self.calls)
+        if self.out_params:
+            out += f' => ({", ".join(repr(ln) for ln in self.out_params)})'
+        return out
 
 
 class Function:
@@ -435,6 +513,14 @@ class Function:
         self.out_params = out_params
         self.out_names = set(p.name for p in out_params + borrowed_params)
 
+    def __repr__(self):
+        out = f'func {self.name}('
+        out += ', '.join(repr(p) for p in self.borrowed_params) + ')('
+        out += ', '.join(repr(p) for p in self.in_params) + ')\n'
+        out += '\n'.join(repr(ln) for ln in self.lines) + '\n'
+        out += 'return (' + ', '.join(repr(p) for p in self.out_params) + ')'
+        return out
+
 
 class Module:
     __slots__ = ['functions', 'global_lines', 'name']
@@ -443,3 +529,7 @@ class Module:
         self.functions = functions
         self.global_lines = global_lines
         self.name = name
+
+    def __repr__(self):
+        return '\n'.join(repr(x) for x in itertools.chain(
+            self.global_lines, self.functions.values()))
