@@ -132,9 +132,9 @@ class Binop:
             return interpreter.Fraction(binop(lhs, rhs))
         node = interpreter.Binop(lhs, binop, rhs, name, hasmono=hasmono)
         # Special eval methods for binops that can short-circuit
-        if name == 'AND':
+        if name == '&':
             node.eval = node.eval_and
-        elif name == 'OR':
+        elif name == '|':
             node.eval = node.eval_or
         return node
 
