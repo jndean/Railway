@@ -12,13 +12,14 @@ number_regex = re.compile('\d+(\/\d+)?')
 string_regex = re.compile('("[^"]*")|(\'[^\']*\')')
 escaped_newline_regex = re.compile('\\\\[ \t\r\f\v]*\n')
 ignore_regex = re.compile('([$][^$]*[$])|([ \t\r\f\v]+)')
-symbols = {
+keywords = {
     'import', 'as', 'global', 'let', 'unlet', 'func', 'return', 'println',
     'print', 'if', 'fi', 'else', 'loop', 'pool', 'for', 'rof', 'call', 'uncall',
     'do', 'undo', 'yield', 'swap', 'push', 'pop', 'try', 'catch', 'yrt',
-    'promote', 'in', 'to', 'by', 'tensor', 'barrier', 'mutex', 'xetum',
-    'TID', '#TID',
-    '<=>', '<=', '=>', '>=', '!=', '==',
+    'promote', 'in', 'to', 'by', 'tensor', 'barrier', 'mutex', 'xetum', 'TID'
+}
+symbols = {
+    '#TID', '<=>', '<=', '=>', '>=', '!=', '==',
     '//=', '**=', '+=', '-=', '*=', '/=', '%=', '^=', '|=', '&=',
     '//', '**', '<', '>', '=', '+', '-', '*', '/', '%', '^', '|', '&',
     '(', ')', '[', ']', '{', '}', ',', '.', '#', '!'
@@ -46,6 +47,19 @@ def tokenise(data, TokenClass=DefaultToken):
             pos += 1
             continue
 
+        name_match = name_regex.match(data, pos)
+        if name_match:
+            endpos = name_match.span()[1]
+            string = data[pos:endpos]
+            if string in keywords:
+                yield TokenClass(string, string, line, col)
+            else:
+                yield TokenClass('NAME', string, line, col)
+            skip_newline = False
+            col += endpos - pos
+            pos = endpos
+            continue
+
         for sym_length in range(min(max_symbol_length, len_data - pos), 0, -1):
             if data[pos:pos + sym_length] in symbols:
                 endpos = pos + sym_length
@@ -56,15 +70,6 @@ def tokenise(data, TokenClass=DefaultToken):
                 pos = endpos
                 break
         else:
-            name_match = name_regex.match(data, pos)
-            if name_match:
-                endpos = name_match.span()[1]
-                string = data[pos:endpos]
-                yield TokenClass('NAME', string, line, col)
-                skip_newline = False
-                col += endpos - pos
-                pos = endpos
-                continue
 
             number_match = number_regex.match(data, pos)
             if number_match:
