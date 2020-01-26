@@ -77,7 +77,7 @@ func reshape2D(X, height, width)()
 return (result)
 
 
-func argmax(X)()
+func argmax1(X)()
     let .max = 0
     for (.i in [1 to #X[0]])
         if (X[0][.i] > X[0][.max])
@@ -88,7 +88,7 @@ func argmax(X)()
 return (max)
 
 
-func argmax_alternative(X)()
+func argmax(X)()
    try (best in [0 to #X[0]])
      for (i in [0 to #X[0]])
        catch (X[0][best] < X[0][i])

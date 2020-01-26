@@ -1,11 +1,4 @@
-import struct
-import sys
-
-import interpreting as interpreter
-from lexingparsing import lex, parse, AST
-from lexingparsing.AST import RailwaySyntaxError
-
+from driver import run
 
 if __name__ == '__main__':
-    program = AST.parse_file('tmp.rail')
-    AST.run_module(program, ''.split())
+    run()

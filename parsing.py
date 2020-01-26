@@ -5,7 +5,6 @@ import sys
 from rply import ParserGenerator, Token
 from rply import ParsingError as RplyParsingError
 
-import AST
 import interpreting
 import lexing
 import newlexer
@@ -659,12 +658,6 @@ def generate_parsing_function(tree):
         if isinstance(lhs, tree.Fraction) and isinstance(rhs, tree.Fraction):
             return tree.Fraction(binop(lhs, rhs))
         node = tree.Binop(lhs, binop, rhs, name, hasmono=hasmono)
-        # Special eval methods for binops that can short-circuit
-        if tree is interpreting:
-            if name == 'AND':
-                node.eval = node.eval_and
-            elif name == 'OR':
-                node.eval = node.eval_or
         return node
 
     @pgen.production('expression : LPAREN expression RPAREN')

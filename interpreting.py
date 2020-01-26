@@ -1,9 +1,11 @@
+from abc import ABC, abstractmethod
 from copy import deepcopy
+from fractions import Fraction as BuiltinFraction
+import itertools
 from threading import Thread, Lock, Event, BrokenBarrierError
 from threading import Barrier as pyBarrier
 
-import AST
-from parsing import generate_parsing_function
+import driver
 
 
 # -------------------- Exceptions ----------------------  #
@@ -39,6 +41,7 @@ class RailwayTryReverseError(RailwayException): pass
 class RailwayImportError(RailwayException): pass
 class RailwayMutexError(RailwayException): pass
 class RailwaySympatheticError(RailwayException): pass
+
 
 # -------------------- Interpreter-Only Objects ---------------------- #
 
@@ -205,9 +208,41 @@ class ThreadManager:
                 turn.set()
 
 
+# ------------- Abstract Base Classes for interpreter nodes ---------- #
+
+class ExpressionNode(ABC):
+    __slots__ = ["hasmono"]
+
+    def __init__(self, hasmono):
+        self.hasmono = hasmono  # Node or subnode uses a mono variable
+
+    @abstractmethod
+    def uses_var(self, name):
+        pass
+
+
+class StatementNode(ABC):
+    __slots__ = ["ismono", "modreverse"]
+
+    def __init__(self, ismono, modreverse):
+        self.ismono = ismono  # Node is only executed forward
+        self.modreverse = modreverse  # (Sub)Node modifies a non-mono var
+
+
 # ------------------------- AST Module level --------------------------#
 
-class Module(AST.Module):
+class Module:
+    __slots__ = ['functions', 'global_lines', 'name']
+
+    def __init__(self, functions, global_lines, name='Unnamed'):
+        self.functions = functions
+        self.global_lines = global_lines
+        self.name = name
+
+    def __repr__(self):
+        return '\n'.join(repr(x) for x in itertools.chain(
+            self.global_lines, self.functions.values()))
+
     def main(self, argv):
         argv = Variable(memory=argv, ismono=False,
                         isborrowed=False, isarray=True)
@@ -223,11 +258,22 @@ class Module(AST.Module):
         main.eval(scope, backwards=False)
 
 
-class Import(AST.Import):
+class Import:
+    __slots__ = ["filename", "alias"]
+
+    def __init__(self, filename, alias):
+        self.filename = filename
+        self.alias = alias
+
+    def __repr__(self):
+        out = f'import "{self.filename}"'
+        if self.alias is not None:
+            out += f' as {self.alias}'
+        return out
+
     def eval(self, scope):
-        parser = generate_parsing_function(None)
         try:
-            module = parser(self.filename)
+            module = driver.parse_file(self.filename)
         except (FileNotFoundError, PermissionError, OSError):
             raise RailwayImportError(
                 f'Error opening file "{self.filename}"', scope=scope)
@@ -248,7 +294,19 @@ class Import(AST.Import):
                 dst[name] = val
 
 
-class Global(AST.Global):
+class Global:
+    __slots__ = ["lookup", "rhs"]
+
+    def __init__(self, lookup, rhs):
+        self.lookup = lookup
+        self.rhs = rhs
+
+    def __repr__(self):
+        out = f'global {self.lookup}'
+        if self.rhs is not None:
+            out += f' = {self.rhs}'
+        return out
+
     def eval(self, scope):
         value = self.rhs.eval(scope=scope)
         isarray = isinstance(value, list)
@@ -264,7 +322,32 @@ class Global(AST.Global):
 
 # ---------------- AST - Function bodies and calls ----------------#
 
-class Function(AST.Function):
+class Function:
+    __slots__ = ["name", "lines", "modreverse",
+                 "borrowed_params", "borrowed_names",
+                 "in_params", "in_names",
+                 "out_params", "out_names"]
+
+    def __init__(self, name, lines, modreverse, borrowed_params, in_params,
+                 out_params):
+        self.name = name
+        self.lines = lines
+        self.modreverse = modreverse
+        self.borrowed_params = borrowed_params
+        self.borrowed_names = set(p.name for p in borrowed_params)
+        self.in_params = in_params
+        self.in_names = set(p.name for p in in_params + borrowed_params)
+        self.out_params = out_params
+        self.out_names = set(p.name for p in out_params + borrowed_params)
+
+    def __repr__(self):
+        out = f'func {self.name}('
+        out += ', '.join(repr(p) for p in self.borrowed_params) + ')('
+        out += ', '.join(repr(p) for p in self.in_params) + ')\n'
+        out += '\n'.join(repr(ln) for ln in self.lines) + '\n'
+        out += 'return (' + ', '.join(repr(p) for p in self.out_params) + ')'
+        return out
+
     def eval(self, scope, backwards):
         if backwards:
             lines, out_names = reversed(self.lines), self.in_names
@@ -290,7 +373,24 @@ class Function(AST.Function):
         return results
 
 
-class CallChain(AST.CallChain):
+class CallChain(StatementNode):
+    __slots__ = ["in_params", "calls", "out_params"]
+
+    def __init__(self, in_params, calls, out_params, **kwargs):
+        super().__init__(**kwargs)
+        self.in_params = in_params
+        self.calls = calls
+        self.out_params = out_params
+
+    def __repr__(self):
+        out = ''
+        if self.in_params:
+            out += f'({", ".join(repr(ln) for ln in self.in_params)}) => '
+        out += ' => '.join(repr(c) for c in self.calls)
+        if self.out_params:
+            out += f' => ({", ".join(repr(ln) for ln in self.out_params)})'
+        return out
+
     def eval(self, scope, backwards):
         if backwards and self.ismono:
             return backwards
@@ -456,12 +556,39 @@ def _check_mono_match(variable, parameter, isuncall, fname, scope):
             f'mono parameter "{parameter.name}"', scope=scope)
 
 
-CallBlock = AST.CallBlock
+class CallBlock:
+    __slots__ = ["isuncall", "name", "num_threads", "borrowed_params"]
+
+    def __init__(self, isuncall, name, num_threads, borrowed_params):
+        self.isuncall = isuncall
+        self.name = name
+        self.num_threads = num_threads
+        self.borrowed_params = borrowed_params
+
+    def __repr__(self):
+        out = ('uncall' if self.isuncall else 'call') + ' ' + self.name
+        if self.num_threads is not None:
+            out += '{' + repr(self.num_threads) + '}'
+        out += f'({", ".join(repr(p) for p in self.borrowed_params)})'
+        return out
 
 
 # -------------------- Try-Catch --------------------#
 
-class Try(AST.Try):
+class Try(StatementNode):
+    __slots__ = ["lookup", "iterator", "lines"]
+
+    def __init__(self, lookup, iterator, lines, **kwargs):
+        super().__init__(**kwargs)
+        self.lookup = lookup
+        self.iterator = iterator
+        self.lines = lines
+
+    def __repr__(self):
+        return '\n'.join([f'try ({self.lookup} in {self.iterator})'] +
+                         [repr(ln) for ln in self.lines] +
+                         ['yrt'])
+
     def eval(self, scope, backwards):
         if hasattr(self.iterator, 'lazy_eval'):
             memory = self.iterator.lazy_eval(scope, backwards)
@@ -507,7 +634,16 @@ class Try(AST.Try):
         raise RailwayExhaustedTry(f'No value of "{name}" was uncaught', scope)
 
 
-class Catch(AST.Catch):
+class Catch(StatementNode):
+    __slots__ = ["expression"]
+
+    def __init__(self, expression, **kwargs):
+        super().__init__(**kwargs)
+        self.expression = expression
+
+    def __repr__(self):
+        return f'catch ({self.expression})'
+
     def eval(self, scope, backwards):
         if backwards:
             return backwards
@@ -529,7 +665,16 @@ def _run_lines(lines, scope, backwards):
 
 # -------------------- AST - Print --------------------#
 
-class Print(AST.Print):
+class Print(StatementNode):
+    __slots__ = ["targets"]
+
+    def __init__(self, targets, **kwargs):
+        super().__init__(**kwargs)
+        self.targets = targets
+
+    def __repr__(self):
+        return f'print({", ".join(repr(t) for t in self.targets)})'
+
     def eval(self, scope, backwards=False):
         if backwards:
             pass #return
@@ -539,7 +684,16 @@ class Print(AST.Print):
         return backwards
 
 
-class PrintLn(AST.PrintLn):
+class PrintLn(StatementNode):
+    __slots__ = ["targets"]
+
+    def __init__(self, targets, **kwargs):
+        super().__init__(**kwargs)
+        self.targets = targets
+
+    def __repr__(self):
+        return f'println({", ".join(repr(t) for t in self.targets)})'
+
     def eval(self, scope, backwards=False):
         if backwards:
             pass #return
@@ -558,13 +712,35 @@ def _stringify(memory):
 
 # -------------------- AST - Barrier, Mutex --------------------#
 
-class Barrier(AST.Barrier):
+class Barrier(StatementNode):
+    __slots__ = ["name"]
+
+    def __init__(self, name, **kwargs):
+        super().__init__(**kwargs)
+        super().__init__(**kwargs)
+        self.name = name
+
+    def __repr__(self):
+        return f'barrier "{self.name}"'
+
     def eval(self, scope, backwards):
         scope.wait_barrier(self.name)
         return backwards
 
 
-class Mutex(AST.Mutex):
+class Mutex(StatementNode):
+    __slots__ = ["name", "lines"]
+
+    def __init__(self, name, lines, **kwargs):
+        super().__init__(**kwargs)
+        self.name = name
+        self.lines = lines
+
+    def __repr__(self):
+        return '\n'.join([f'mutex "{self.name}"'] +
+                         [repr(ln) for ln in self.lines] +
+                         ['xetum'])
+
     def eval(self, scope, backwards):
         mutex = scope.acquire_mutex(self.name, backwards)
         new_backwards = _run_lines(self.lines, scope, backwards)
@@ -587,7 +763,21 @@ class MutexInstance:
 
 # -------------------- AST - Do-Yield-Undo --------------------#
 
-class DoUndo(AST.DoUndo):
+class DoUndo(StatementNode):
+    __slots__ = ["do_lines", "yield_lines"]
+
+    def __init__(self, do_lines, yield_lines, **kwargs):
+        super().__init__(**kwargs)
+        self.do_lines = do_lines
+        self.yield_lines = yield_lines
+
+    def __repr__(self):
+        lines = ['do'] + [repr(ln) for ln in self.do_lines]
+        if self.yield_lines:
+            lines += ['yield'] + [repr(ln) for ln in self.yield_lines]
+        lines.append('undo')
+        return '\n'.join(lines)
+
     def eval(self, scope, backwards):
         # The 'do' lines may reverse
         if _run_lines(self.do_lines, scope, backwards=False):
@@ -614,7 +804,20 @@ class DoUndo(AST.DoUndo):
 
 # -------------------- AST - For --------------------#
 
-class For(AST.For):
+class For(StatementNode):
+    __slots__ = ["lookup", "iterator", "lines"]
+
+    def __init__(self, lookup, iterator, lines, **kwargs):
+        super().__init__(**kwargs)
+        self.lookup = lookup
+        self.iterator = iterator
+        self.lines = lines
+
+    def __repr__(self):
+        return '\n'.join([f'for ({self.lookup} in {self.iterator})'] +
+                         [repr(ln) for ln in self.lines] +
+                         ['rof'])
+
     def eval(self, scope, backwards):
         if hasattr(self.iterator, 'lazy_eval'):
             memory = self.iterator.lazy_eval(scope, backwards)
@@ -651,7 +854,20 @@ class For(AST.For):
 
 # -------------------- AST - Loop, If --------------------#
 
-class Loop(AST.Loop):
+class Loop(StatementNode):
+    __slots__ = ["forward_condition", "lines", "backward_condition"]
+
+    def __init__(self, forward_condition, lines, backward_condition, **kwargs):
+        super().__init__(**kwargs)
+        self.forward_condition = forward_condition
+        self.lines = lines
+        self.backward_condition = backward_condition
+
+    def __repr__(self):
+        return '\n'.join([f'loop ({self.forward_condition})'] +
+                         [repr(ln) for ln in self.lines] +
+                         [f'pool ({self.backward_condition})'])
+
     def eval(self, scope, backwards):
         if backwards and not self.modreverse:
             return True
@@ -680,7 +896,23 @@ class Loop(AST.Loop):
         return backwards
 
 
-class If(AST.If):
+class If(StatementNode):
+    __slots__ = ["enter_expr", "lines", "else_lines", "exit_expr"]
+
+    def __init__(self, enter_expr, lines, else_lines, exit_expr, **kwargs):
+        super().__init__(**kwargs)
+        self.enter_expr = enter_expr
+        self.lines = lines
+        self.else_lines = else_lines
+        self.exit_expr = exit_expr
+
+    def __repr__(self):
+        lines = [f'if ({self.enter_expr})'] + [repr(ln) for ln in self.lines]
+        if self.else_lines is not None:
+            lines += ['else'] + [repr(ln) for ln in self.else_lines]
+        lines.append(f'fi ({self.exit_expr})')
+        return '\n'.join(lines)
+
     def eval(self, scope, backwards):
         if backwards and not self.modreverse:
             return backwards
@@ -700,7 +932,17 @@ class If(AST.If):
 
 # -------------------- AST - Push Pop Swap --------------------#
 
-class Push(AST.Push):
+class Push(StatementNode):
+    __slots__ = ["src_lookup", "dst_lookup"]
+
+    def __init__(self, src_lookup, dst_lookup, **kwargs):
+        super().__init__(**kwargs)
+        self.src_lookup = src_lookup
+        self.dst_lookup = dst_lookup
+
+    def __repr__(self):
+        return f'push {self.src_lookup} => {self.dst_lookup}'
+
     def eval(self, scope, backwards):
         if backwards:
             if not self.ismono:
@@ -732,7 +974,17 @@ def push_eval(scope, src_lookup, dst_lookup):
     scope.remove(src_lookup.name)
 
 
-class Pop(AST.Pop):
+class Pop(StatementNode):
+    __slots__ = ["src_lookup", "dst_lookup"]
+
+    def __init__(self, src_lookup, dst_lookup, **kwargs):
+        super().__init__(**kwargs)
+        self.src_lookup = src_lookup
+        self.dst_lookup = dst_lookup
+
+    def __repr__(self):
+        return f'pop {self.src_lookup} => {self.dst_lookup}'
+
     def eval(self, scope, backwards):
         if backwards:
             if not self.ismono:
@@ -765,7 +1017,22 @@ def pop_eval(scope, src_lookup, dst_lookup):
     scope.assign(name=dst_lookup.name, var=var)
 
 
-class Swap(AST.Swap):
+class Swap(StatementNode):
+    __slots__ = ["lhs_lookup", "rhs_lookup", "lhs_idx", "rhs_idx"]
+
+    def __init__(self, lhs_lookup, rhs_lookup, lhs_idx, rhs_idx, **kwargs):
+        super().__init__(**kwargs)
+        self.lhs_lookup = lhs_lookup
+        self.rhs_lookup = rhs_lookup
+        self.lhs_idx = lhs_idx
+        self.rhs_idx = rhs_idx
+
+    def __repr__(self):
+        lhs, rhs = repr(self.lhs_lookup), repr(self.rhs_lookup)
+        lhs += f'[{self.lhs_idx}]'if self.lhs_idx is not None else ''
+        rhs += f'[{self.rhs_idx}]' if self.rhs_idx is not None else ''
+        return f'swap {lhs} <=> {rhs}'
+
     def eval(self, scope, backwards):
         if self.lhs_idx is None:
             lhs_mem = scope.lookup(self.lhs_lookup.name).memory
@@ -808,7 +1075,17 @@ class Swap(AST.Swap):
 
 # ----------------------- AST - Promote -----------------------#
 
-class Promote(AST.Promote):
+class Promote(StatementNode):
+    __slots__ = ["src_name", "dst_name"]
+
+    def __init__(self, src_name, dst_name, **kwargs):
+        super().__init__(**kwargs)
+        self.src_name = src_name
+        self.dst_name = dst_name
+
+    def __repr__(self):
+        return f'promote {self.src_name} => {self.dst_name}'
+
     def eval(self, scope, backwards):
         if backwards:
             if scope.lookup(self.dst_name).isborrowed:
@@ -829,7 +1106,20 @@ class Promote(AST.Promote):
 
 # -------------------- AST - Modifications --------------------#
 
-class Modop(AST.Modop):
+class Modop(StatementNode):
+    __slots__ = ["lookup", "op", "inv_op", "expr", "name"]
+
+    def __init__(self, lookup, op, inv_op, expr, name="UNNAMED", **kwargs):
+        super().__init__(**kwargs)
+        self.lookup = lookup
+        self.op = op
+        self.inv_op = inv_op
+        self.expr = expr
+        self.name = name
+
+    def __repr__(self):
+        return f'{self.lookup} {self.name} {self.expr}'
+
     def eval(self, scope, backwards):
         if backwards and self.ismono:
             return backwards
@@ -852,7 +1142,18 @@ class Modop(AST.Modop):
 
 # -------------------- AST - Let and Unlet --------------------#
 
-class Let(AST.Let):
+class Let(StatementNode):
+    __slots__ = ["lookup", "rhs"]
+
+    def __init__(self, lookup, rhs, **kwargs):
+        super().__init__(**kwargs)
+        self.lookup = lookup
+        self.rhs = rhs
+
+    def __repr__(self):
+        assignment = f' = {self.rhs}' if self.rhs is not None else ' '
+        return f'let {self.lookup}{assignment}'
+
     def eval(self, scope, backwards):
         if backwards:
             if not self.ismono:
@@ -862,7 +1163,18 @@ class Let(AST.Let):
         return backwards
 
 
-class Unlet(AST.Unlet):
+class Unlet(StatementNode):
+    __slots__ = ["lookup", "rhs"]
+
+    def __init__(self, lookup, rhs,  **kwargs):
+        super().__init__(**kwargs)
+        self.lookup = lookup
+        self.rhs = rhs
+
+    def __repr__(self):
+        assignment = f' = {self.rhs}' if self.rhs is not None else' '
+        return f'unlet {self.lookup}{assignment}'
+
     def eval(self, scope, backwards):
         if backwards:
             if not self.ismono:
@@ -908,12 +1220,43 @@ def unlet_eval(self, scope):
 
 # -------------------- Arrays -------------------- #
 
-class ArrayLiteral(AST.ArrayLiteral):
+class ArrayLiteral(ExpressionNode):
+    __slots__ = ["items", "unowned"]
+
+    def __init__(self, items, unowned, **kwargs):
+        super().__init__(**kwargs)
+        self.items = items
+        self.unowned = unowned
+
+    def uses_var(self, name):
+        return any(x.uses_var(name) for x in self.items)
+
+    def __repr__(self):
+        return repr(self.items)
+
     def eval(self, scope):
         return [item.eval(scope) for item in self.items]
 
 
-class ArrayRange(AST.ArrayRange):
+class ArrayRange(ExpressionNode):
+    __slots__ = ["start", "stop", "step", "unowned"]
+
+    def __init__(self, start, stop, step, unowned, **kwargs):
+        super().__init__(**kwargs)
+        self.start = start
+        self.stop = stop
+        self.step = step
+        self.unowned = unowned
+
+    def uses_var(self, name):
+        return (self.start.uses_var(name)
+                or self.step.uses_var(name)
+                or self.stop.uses_var(name))
+
+    def __repr__(self):
+        by_str = '' if self.step is None else f' by {self.step}'
+        return f'[{self.start} to {self.stop}{by_str}]'
+
     def eval(self, scope):
         val = self.start.eval(scope=scope)
         step = self.step.eval(scope=scope)
@@ -969,7 +1312,22 @@ class _LazyRange:
         return self.length
 
 
-class ArrayTensor(AST.ArrayTensor):
+class ArrayTensor(ExpressionNode):
+    __slots__ = ["fill_expr", "dims_expr", "unowned"]
+
+    def __init__(self, fill_expr, dims_expr, unowned, **kwargs):
+        super().__init__(**kwargs)
+        self.fill_expr = fill_expr
+        self.dims_expr = dims_expr
+        self.unowned = unowned
+
+    def uses_var(self, name):
+        return (self.dims_expr.uses_var(name)
+                or self.fill_expr.uses_var(name))
+
+    def __repr__(self):
+        return f'[{self.fill_expr} tensor {self.dims_expr}]'
+
     def eval(self, scope):
         dims = self.dims_expr.eval(scope=scope)
         err_msg = None
@@ -1008,8 +1366,32 @@ class ArrayTensor(AST.ArrayTensor):
 
 # -------------------- Expressions -------------------- #
 
-class Binop(AST.Binop):
+class Binop(ExpressionNode):
+    __slots__ = ["lhs", "op", "rhs", "name", "__eval"]
+
+    def __init__(self, lhs, op, rhs, name="UNNAMED", **kwargs):
+        super().__init__(**kwargs)
+        self.lhs = lhs
+        self.op = op
+        self.rhs = rhs
+        self.name = name
+        if name == 'AND':
+            self.__eval = self.eval_and
+        elif name == 'OR':
+            self.__eval = self.eval_or
+        else:
+            self.__eval = self.eval_normal
+
+    def uses_var(self, name):
+        return self.lhs.uses_var(name) or self.rhs.uses_var(name)
+
+    def __repr__(self):
+        return f'({self.lhs} {self.name} {self.rhs})'
+
     def eval(self, scope):
+        return self.__eval(scope)
+
+    def eval_normal(self, scope):
         lhs = self.lhs.eval(scope=scope)
         rhs = self.rhs.eval(scope=scope)
         if isinstance(lhs, list) or isinstance(rhs, list):
@@ -1035,7 +1417,21 @@ class Binop(AST.Binop):
         return Fraction(bool(self.rhs.eval(scope=scope)))
 
 
-class Uniop(AST.Uniop):
+class Uniop(ExpressionNode):
+    __slots__ = ["op", "expr", "name"]
+
+    def __init__(self, op, expr, name="UNNAMED", **kwargs):
+        super().__init__(**kwargs)
+        self.op = op
+        self.expr = expr
+        self.name = name
+
+    def uses_var(self, name):
+        return self.expr.uses_var(name)
+
+    def __repr__(self):
+        return f'{self.name}{self.expr}'
+
     def eval(self, scope):
         val = self.expr.eval(scope=scope)
         if isinstance(val, list):
@@ -1045,7 +1441,19 @@ class Uniop(AST.Uniop):
         return Fraction(self.op(val))
 
 
-class Length(AST.Length):
+class Length(ExpressionNode):
+    __slots__ = ["lookup"]
+
+    def __init__(self, lookup, **kwargs):
+        super().__init__(**kwargs)
+        self.lookup = lookup
+
+    def uses_var(self, name):
+        return self.lookup.uses_var(name)
+
+    def __repr__(self):
+        return f'#{repr(self.lookup)}'
+
     def eval(self, scope):
         value = self.lookup.eval(scope)
         if not isinstance(value, list):
@@ -1055,7 +1463,23 @@ class Length(AST.Length):
         return Fraction(len(value))
 
 
-class Lookup(AST.Lookup):
+class Lookup(ExpressionNode):
+    __slots__ = ["name", "index", "mononame"]
+
+    def __init__(self, name, index, mononame, **kwargs):
+        super().__init__(**kwargs)
+        self.name = name
+        self.index = index
+        self.mononame = mononame
+
+    def uses_var(self, name):
+        return (self.name == name) or any(i.uses_var(name) for i in self.index)
+
+    def __repr__(self):
+        if self.index:
+            return f'{self.name}[{"][".join(repr(i) for i in self.index)}]'
+        return self.name
+
     def eval(self, scope):
         var = scope.lookup(self.name)
         if var.isarray:  # Arrays
@@ -1112,25 +1536,65 @@ class Lookup(AST.Lookup):
         memory[index] = value
 
 
-class ThreadID(AST.ThreadID):
+class ThreadID(ExpressionNode):
+    __slots__ = []
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def uses_var(self, name):
+        return False
+
+    def __repr__(self):
+        return 'TID()'
+
     def eval(self, scope):
         return scope.thread_num
 
 
-class NumThreads(AST.NumThreads):
+class NumThreads(ExpressionNode):
+    __slots__ = []
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def uses_var(self, name):
+        return False
+
+    def __repr__(self):
+        return '#TID()'
+
     def eval(self, scope):
         if scope.thread_num == -1:
             return scope.thread_num
         return Fraction(scope.thread_manager.num_threads)
 
 
-class Fraction(AST.Fraction):
+class Fraction(BuiltinFraction):
+    hasmono = False
+
+    def uses_var(self, name):
+        return False
+
+    def __repr__(self):
+        return str(self)
+
     def eval(self, scope=None):
         return self
 
 
-# Parameters are never eval'd to don't need extending
-Parameter = AST.Parameter
+class Parameter:
+    __slots__ = ["name", "mononame", "isborrowed"]
+
+    def __init__(self, name, mononame, isborrowed):
+        self.name = name
+        self.mononame = mononame
+        self.isborrowed = isborrowed
+
+    def __repr__(self):
+        return repr(self.name)
+
+    # Parameters are never eval'd
 
 
 def __modop_mul(a, b):

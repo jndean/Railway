@@ -1,0 +1,7 @@
+
+global const = 1701/2
+
+func myadd(a, b)(c)
+  let res = a + b + c
+  unlet c = res - a - b
+return (res)
