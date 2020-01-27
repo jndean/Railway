@@ -1,4 +1,3 @@
-+ Integrate PEG parser
 - Make mono assignment work on array lookups
 - Check mono imports are ok
 - Stop the get and set methods of lookups doing duplicate index evaluations

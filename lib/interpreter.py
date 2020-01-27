@@ -5,7 +5,7 @@ import itertools
 from threading import Thread, Lock, Event, BrokenBarrierError
 from threading import Barrier as pyBarrier
 
-import driver
+from . import driver
 
 
 # -------------------- Exceptions ----------------------  #
@@ -1375,9 +1375,9 @@ class Binop(ExpressionNode):
         self.op = op
         self.rhs = rhs
         self.name = name
-        if name == 'AND':
+        if name == '&':
             self.__eval = self.eval_and
-        elif name == 'OR':
+        elif name == '|':
             self.__eval = self.eval_or
         else:
             self.__eval = self.eval_normal

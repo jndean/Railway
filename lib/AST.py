@@ -1,9 +1,8 @@
 from collections import Counter
 from fractions import Fraction as BuiltinFraction
 from os.path import split as os_split
-import sys
 
-import interpreting as interpreter
+from . import interpreter
 
 
 class RailwaySyntaxError(RuntimeError): pass
@@ -131,13 +130,7 @@ class Binop:
         if (isinstance(lhs, interpreter.Fraction) and
                 isinstance(rhs, interpreter.Fraction)):
             return interpreter.Fraction(binop(lhs, rhs))
-        node = interpreter.Binop(lhs, binop, rhs, name, hasmono=hasmono)
-        # Special eval methods for binops that can short-circuit
-        if name == '&':
-            node.eval = node.eval_and
-        elif name == '|':
-            node.eval = node.eval_or
-        return node
+        return interpreter.Binop(lhs, binop, rhs, name, hasmono=hasmono)
 
 
 class Uniop:

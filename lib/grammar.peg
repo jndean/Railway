@@ -1,4 +1,4 @@
-@{from railwayparsergenerator import (
+@{from .AST import (
     Token, ThreadID, NumThreads, Lookup, Length, Uniop, Binop, ArrayLiteral,
     ArrayTensor, ArrayRange, Let, Unlet, Promote, Pop, Push, Swap, If, Loop,
     For, Barrier, Mutex, Modop, Print, PrintLn, DoUndo, Catch, Try,

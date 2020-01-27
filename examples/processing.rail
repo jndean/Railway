@@ -6,8 +6,8 @@ This program just demonstrates importing code from other files, and chaining
 function calls (and uncalls) together in a single statement.
 $
 
-import "examples\run_length_encoding.rail" as RL
-import "examples\cellular_automaton.rail" as CA
+import "run_length_encoding.rail" as RL
+import "cellular_automaton.rail" as CA
 
 global key = [82, 65, 105, 49, 119, 52, 121, 33]
 
@@ -15,15 +15,15 @@ func main(argv)()
     let grid = CA.grid
 
     (grid) => call serialise()    \
-            > call RL.compress()  \
-            > uncall decrypt(key) \
+           => call RL.compress()  \
+           => uncall decrypt(key) \
            => (data)
 
     println('Serialised:', data)
 
     (data) => call decrypt(key)    \
-            > uncall RL.compress() \
-            > uncall serialise()   \
+           => uncall RL.compress() \
+           => uncall serialise()   \
            => (grid)
 
     call CA..draw(grid, CA.w, CA.h)

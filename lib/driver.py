@@ -1,11 +1,11 @@
 import struct
 import sys
 
-from interpreting import Fraction, RailwayException
+from .interpreter import Fraction, RailwayException
 
-from lexingparsing.lex import RailwayLexingError, tokenise
-from lexingparsing.parse import RailwayParser, Token
-from lexingparsing.AST import RailwaySyntaxError
+from .lexer import RailwayLexingError, tokenise
+from .parser import RailwayParser, Token
+from .AST import RailwaySyntaxError
 
 
 def parse_argv(args):
@@ -89,3 +89,7 @@ def run():
     filename, *args = sys.argv[1:]
     module = parse_file(filename)
     run_module(module, args)
+
+
+if __name__ == '__main__':
+    run()
