@@ -1609,74 +1609,38 @@ def __modop_div(a, b):
     return a / b
 
 
-binops = {'ADD': lambda a, b: a + b,
-          'SUB': lambda a, b: a - b,
-          'MUL': lambda a, b: a * b,
-          'DIV': lambda a, b: a / b,
-          'POW': lambda a, b: a ** b,
-          'IDIV': lambda a, b: a // b,
-          'MOD': lambda a, b: a % b,
-          'XOR': lambda a, b: bool(a) ^ bool(b),
-          'OR': lambda a, b: bool(a) | bool(b),
-          'AND': lambda a, b: bool(a) & bool(b),
-          'LESS': lambda a, b: a < b,
-          'LEQ': lambda a, b: a <= b,
-          'GREAT': lambda a, b: a > b,
-          'GEQ': lambda a, b: a >= b,
-          'EQ': lambda a, b: a == b,
-          'NEQ': lambda a, b: a != b}
+binops = {'+': lambda a, b: a + b,
+          '-': lambda a, b: a - b,
+          '*': lambda a, b: a * b,
+          '/': lambda a, b: a / b,
+          '**': lambda a, b: a ** b,
+          '//': lambda a, b: a // b,
+          '%': lambda a, b: a % b,
+          '^': lambda a, b: bool(a) ^ bool(b),
+          '|': lambda a, b: bool(a) | bool(b),
+          '&': lambda a, b: bool(a) & bool(b),
+          '<': lambda a, b: a < b,
+          '<=': lambda a, b: a <= b,
+          '>': lambda a, b: a > b,
+          '>=': lambda a, b: a >= b,
+          '==': lambda a, b: a == b,
+          '!=': lambda a, b: a != b}
 
-uniops = {'NOT': lambda x: not bool(x),
-          'SUB': lambda x: -x}
+uniops = {'!': lambda x: not bool(x),
+          '-': lambda x: -x}
 
-modops = {'MODADD': binops['ADD'],
-          'MODSUB': binops['SUB'],
-          'MODMUL': __modop_mul,
-          'MODDIV': __modop_div,
-          'MODIDIV': binops['IDIV'],
-          'MODPOW': binops['POW'],
-          'MODMOD': binops['MOD'],
-          'MODXOR': binops['XOR'],
-          'MODOR': binops['OR'],
-          'MODAND': binops['AND']}
+modops = {'+=': binops['+'],
+          '-=': binops['-'],
+          '*=': __modop_mul,
+          '/=': __modop_div,
+          '//=': binops['//'],
+          '**=': binops['**'],
+          '%=': binops['%'],
+          '^=': binops['^'],
+          '|=': binops['|'],
+          '&=': binops['&']}
 
-inv_modops = {'MODADD': modops['MODSUB'],
-              'MODSUB': modops['MODADD'],
-              'MODMUL': modops['MODDIV'],
-              'MODDIV': modops['MODMUL']}
-
-_binops = {'+': lambda a, b: a + b,
-           '-': lambda a, b: a - b,
-           '*': lambda a, b: a * b,
-           '/': lambda a, b: a / b,
-           '**': lambda a, b: a ** b,
-           '//': lambda a, b: a // b,
-           '%': lambda a, b: a % b,
-           '^': lambda a, b: bool(a) ^ bool(b),
-           '|': lambda a, b: bool(a) | bool(b),
-           '&': lambda a, b: bool(a) & bool(b),
-           '<': lambda a, b: a < b,
-           '<=': lambda a, b: a <= b,
-           '>': lambda a, b: a > b,
-           '>=': lambda a, b: a >= b,
-           '==': lambda a, b: a == b,
-           '!=': lambda a, b: a != b}
-
-_uniops = {'!': lambda x: not bool(x),
-           '-': lambda x: -x}
-
-_modops = {'+=': _binops['+'],
-           '-=': _binops['-'],
-           '*=': __modop_mul,
-           '/=': __modop_div,
-           '//=': _binops['//'],
-           '**=': _binops['**'],
-           '%=': _binops['%'],
-           '^=': _binops['^'],
-           '|=': _binops['|'],
-           '&=': _binops['&']}
-
-_inv_modops = {'+=': _modops['-='],
-               '-=': _modops['+='],
-               '*=': _modops['/='],
-               '/=': _modops['*=']}
+inv_modops = {'+=': modops['-='],
+              '-=': modops['+='],
+              '*=': modops['/='],
+              '/=': modops['*=']}

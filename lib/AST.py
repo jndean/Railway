@@ -124,7 +124,7 @@ class Binop:
     def compile(self):
         lhs, rhs = self.lhs.compile(), self.rhs.compile()
         name = self.op.type
-        binop = interpreter._binops[name]
+        binop = interpreter.binops[name]
         hasmono = lhs.hasmono or rhs.hasmono
         # Compile-time constant computation #
         if (isinstance(lhs, interpreter.Fraction) and
@@ -146,7 +146,7 @@ class Uniop:
     def compile(self):
         name = self.op.string
         expr = self.expr.compile()
-        uniop = interpreter._uniops[self.op.type]
+        uniop = interpreter.uniops[self.op.type]
         # Compile-time constant computation #
         if isinstance(expr, interpreter.Fraction):
             return interpreter.Fraction(uniop(expr))
@@ -450,7 +450,8 @@ class Loop:
         if backward_condition is not None:
             backward_condition = backward_condition.compile()
         ismono = (forward_condition.hasmono or
-            (backward_condition is not None and backward_condition.hasmono))
+                  (backward_condition is not None and
+                   backward_condition.hasmono))
         if ismono == (backward_condition is not None):
             raise RailwaySyntaxError('A loop should have a reverse condition '
                                      'if and only if it is bi-directional')
@@ -508,13 +509,13 @@ class Modop:
         lookup = self.lookup.compile()
         expr = self.expr.compile()
         op_name = self.op.type
-        op = interpreter._modops[op_name]
+        op = interpreter.modops[op_name]
         ismono = lookup.hasmono or expr.hasmono
-        if (not ismono) and op_name not in interpreter._inv_modops:
+        if (not ismono) and op_name not in interpreter.inv_modops:
             raise RailwayNoninvertibleModification(
                 f'Performing non-invertible operation {op_name} on non-mono '
                 f'variable "{lookup.name}"')
-        inv_op = None if ismono else interpreter._inv_modops[op_name]
+        inv_op = None if ismono else interpreter.inv_modops[op_name]
         modreverse = not lookup.mononame
         if ismono and modreverse:
             raise RailwayIllegalMono(
