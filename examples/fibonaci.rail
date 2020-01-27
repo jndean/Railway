@@ -1,5 +1,5 @@
 $ USAGE $
-$   python railway.py fibonacci.rail -n 9   $
+$   railway fibonacci.rail -n 9   $
 
 $ This example shows that recursion is available as normal and is invertible, $
 $ by explicitly computng and uncomputing the Nth fibonaci number. Normally to $

@@ -1,9 +1,9 @@
 $
 USAGE:
- python railway.py predict.rail \
-         -f32 W1.float32 \
-         -f32 W2.float32 \
-         -f32 images/11_six.float32
+railway predict.rail \
+      -f32 W1.float32 \
+      -f32 W2.float32 \
+      -f32 images/11_six.float32
 
 This program runs a tiny neural network to guess the hand-written digit in
 images taken from the MNIST corpus. It demonstrates passing data files in from

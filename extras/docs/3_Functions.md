@@ -65,26 +65,26 @@ $ Consumes 'encrypted', borrows 'key', creates 'data' $
 I settled on this weird call syntax with arrows because with more traditional calls it was not very clear what information is being created and what is being consumed once you start making uncalls. This syntax is why the borrowed parameters are a distinct list to the stolen parameters in the function declaration; they are visually tightly bound to the function call, regardless of its direction, whereas the flow of data consumption / creation is separate. The flow needn't be left to right, you can write the arrows the other way around to get the opposite. If there are no stolen parameters or no return values, the corresponding brackets and arrow are optional (like example 1 above). This visual pipeline naturally lends itself to chaining function calls together; if the number of parameters created by one function matches the number consumed by another, the pipe may go directly from one to the other, and the intermediate variables never enter the calling scope. The below example is taken from _examples/processing.rail_.
 
 ```railway
-(grid) => call serialise() > call RL.compress() > uncall decrypt(key) => (data)
+(grid) => call serialise() => call RL.compress() => uncall decrypt(key) => (data)
 
 println(data)
 
-(data) => call decrypt(key) > uncall RL.compress() > uncall serialise() => (grid)
+(data) => call decrypt(key) => uncall RL.compress() => uncall serialise() => (grid)
 ```
 
-Note how the chains can mix calls and uncalls. Of course, what I really wanted was for the chaining arrows to be `=>` not `>`, but unfortunately this was not possible to parse with an LL(1) parsing algorithm. 
+Note how the chains can mix calls and uncalls.
 
 Function chains get long quickly, so now is a good time to mention that the _Railway_ lexer allows the escaping of newlines using `\`. Put these where you see fit, there are no formatting guidelines.
 
 ```railway
 (grid) => call serialise()   \
-        > call RL.compress() \
-        > uncall decrypt(key)\
+       => call RL.compress() \
+       => uncall decrypt(key)\
        => (data)
 
 (grid) => call serialise()    \
-         > call RL.compress()  \
-          > uncall decrypt(key) => (data)
+        => call RL.compress()  \
+         => uncall decrypt(key) => (data)
 ```
 
 

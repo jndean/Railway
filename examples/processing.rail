@@ -1,6 +1,6 @@
 $
 USAGE
- python railway.py examples/processing.rail
+railway processing.rail
 
 This program just demonstrates importing code from other files, and chaining
 function calls (and uncalls) together in a single statement.

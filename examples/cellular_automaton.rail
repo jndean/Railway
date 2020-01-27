@@ -1,6 +1,6 @@
 $
 USAGE
-python railway.py examples/cellular_automaton.rail
+railway cellular_automaton.rail
 
 This program implements a reversible cellular automaton called 'critters'. The
 grid is segmented into 2x2 blocks of cells (wrapped at the grid edge) which

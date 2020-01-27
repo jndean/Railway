@@ -1,6 +1,6 @@
 $
 USAGE:
- python railway.py examples/random_mean_var.railway
+ railway random_mean_var.rail
 
 This program uses a cyclic shift register to generate an array of random
 numbers. CCRs are designed around fast register ops on CPUs, and are really

@@ -1,6 +1,6 @@
 $
 USAGE
- python railway.py examples/run_length_encoding.rail
+ railway run_length_encoding.rail
 
 This program runs a simple lossless compression algorithm on an array, and
 demonstrates getting the decompression function for free by reversing the code.
