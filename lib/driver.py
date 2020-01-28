@@ -86,6 +86,8 @@ def parse_file(filename):
 
 
 def run():
+    if len(sys.argv) < 2:
+        sys.exit('No .rail file specified')
     filename, *args = sys.argv[1:]
     module = parse_file(filename)
     run_module(module, args)

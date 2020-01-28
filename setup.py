@@ -9,6 +9,8 @@ setup(
     description="A time-and-memory-linearly reversible imperative "
                 "programming language",
     long_description=long_description,
+    long_description_content_type="text/markdown",
+    url="https://github.com/jndean/railway",
     packages=find_packages(),
     python_requires='>=3.8',
     entry_points={
