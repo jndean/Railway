@@ -26,7 +26,7 @@ func main(argv)()
            => uncall serialise()   \
            => (grid)
 
-    call CA..draw(grid, CA.w, CA.h)
+    call .CA.draw(grid, CA.w, CA.h)
 
     unlet grid = CA.grid
 return ()

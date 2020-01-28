@@ -61,7 +61,7 @@ Eventually I went with the name _mono-directional_, because _dirty_ didn't reall
 
 Integer division is not the only non-invertible operation that is possible in-place on mono variables. There is also pow, mod, logical xor, logical and, and logical or, using `**=`, `%=`, `^=`, `&=` and `|=` respectively. (If you hesitated when you read that logical xor is not invertible, recall that it is different from bitwise xor which I could not define on arbitrary precision rationals. Under logical xor, `54 ^ 0 = 1`, and we can't recover 54 from 1 using 0.) More importantly, we are not restricted to only non-invertible arithmetic operations. Mono variables are also allowed to silently pass out of scope since we don't need to know their final resting value in order to reinitialise them in reverse. Equally we may use assignment on a mono variable, i.e. override its old value with a new value. So in fact mono variables open up a whole new world of algorithms that were previously impossible in 'pure' _Railway_. I have attempted to illustrate this in the below 'case study'.
 
-Finally, we briefly list the impact of mono variables on other _Railway_ structures.
+Now, we briefly list the impact of mono variables on other _Railway_ structures.
 
 1. As outlined in the [Control Structures](2_ControlStructures.md) page, the if statement, loop and for loop all become mono-directional if their forwards condition or forwards iterator contain mono variables. This means the entire control structure only runs when time is going forwards. Thus mono-directional control structures may not modify non-mono variables.
 
@@ -92,6 +92,28 @@ Finally, we briefly list the impact of mono variables on other _Railway_ structu
        rof
    return ()
    ```
+
+When it comes to importing railway modules from other modules, it is important to realise the dot indicating a mono variable or function is not attached to the name. Rather it is (sort of) more like a unary operator, made obvious by the fact that the following two lines are equivalent.
+
+```
+let .x = .y + .z
+let . x = . y + . z
+```
+
+So, when importing _Railway_ modules, the dot "operator" moves to the front of the whole name. Suppose the file _othercode.rail_ defines two global functions, `A` and `.B`, where `.B` is mono-directional. Importing and calling these functions would go as follows
+
+```
+import "othercode.rail" as Other
+...
+call Other.A()
+call .Other.B()
+```
+
+The mono dot is at the front of the whole lookup, it is not attached to the 'B' and we do not write `call Other..B()`. Don't get carried thinking it _is_ a unary operator though. Things like the following don't really make sense an will cause a parsing error.
+
+```railway
+let .x = .(y)
+```
 
 
 

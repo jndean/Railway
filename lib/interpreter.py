@@ -285,9 +285,12 @@ class Import:
                          (module_scope.functions, scope.functions),
                          (module.functions, scope.functions)]:
             for key, val in src.items():
-                name = key if self.alias == '' else self.alias + '.' + key
-                # if val.ismono and :
-                #     name = '.' + name
+                if self.alias == '':
+                    name = key
+                elif key[0] == '.':
+                    name = '.' + self.alias + key
+                else:
+                    name = self.alias + '.' + key
                 if name in dst:
                     raise RailwayNameClash(
                         f'Name clash of "{name}" during import', scope=scope)
