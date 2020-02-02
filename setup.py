@@ -5,7 +5,7 @@ with open('README.md', 'r') as f:
 
 setup(
     name="railway",
-    version="0.3.0",
+    version="1.0.0",
     description="A time-and-memory-linearly reversible imperative "
                 "programming language",
     long_description=long_description,
