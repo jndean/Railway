@@ -1,7 +1,7 @@
 # Railway
 Railway is my amateur attempt at a reversible imperative programming language. Its unique features (compared to reversible languages I have read about) include communicating multi-threading, mono-directional 'rvalue' variables, and the try-catch construct. In the interest of unrestricted experimentation some of the language's features are slightly at odds with one another, however they are disjoint enough that there are very cohesive subsets.
 
-This repository contains a simple tree-walking proof-of-concept _Railway_ interpreter, placing a high emphasis on ensuring program correctness at run-time and completely disregarding performance (speed). A possible future project is to write a proper byte-code compiler, or devise an alternative dialect suitable for machine-code compilation.
+This repository contains a simple tree-walking proof-of-concept _Railway_ interpreter, placing a high emphasis on ensuring program correctness at run-time and completely disregarding performance (speed). A possible [future project](https://github.com/jndean/monoxide) is to write a proper byte-code compiler, or devise an alternative dialect suitable for machine-code compilation.
 
 ### Usage
 
